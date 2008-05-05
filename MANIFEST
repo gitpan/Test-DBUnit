@@ -1,0 +1,10 @@
+Changes
+lib/DBUnit.pm
+lib/Test/DBUnit.pm
+Makefile.PL
+MANIFEST
+README
+t/dbunit.t
+t/test/dbunit.t
+t/test/skip.t
+META.yml                                 Module meta-data (added by MakeMaker)

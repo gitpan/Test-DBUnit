@@ -1,0 +1,29 @@
+Test/DBunit version 0.01
+===========================
+    Simple database test interface.
+
+
+INSTALLATION
+
+To install this module type the following:
+
+   perl Makefile.PL
+   make
+   make test
+   make install
+
+DEPENDENCIES
+
+This module requires these other modules and libraries:
+
+  Abstract::Meta::Class 
+  DBIx::Connection
+  Simple::SAX::Serializer
+
+COPYRIGHT AND LICENCE
+
+    (c) 2004 by Adrian Witas.
+    
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself. 
+
