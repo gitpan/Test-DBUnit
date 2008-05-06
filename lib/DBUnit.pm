@@ -4,14 +4,14 @@ use strict;
 use warnings;
 use vars qw(@EXPORT_OK %EXPORT_TAGS $VERSION);
 
-$VERSION = '0.01';
+$VERSION = '0.02';
 use Abstract::Meta::Class ':all';
 use base 'Exporter';
 use Carp 'confess';
 use DBIx::Connection;
 use Simple::SAX::Serializer;
 
-@EXPORT_OK = qw(INSERT_LOAD_STRATEGY REFRESH_LOAD_STRATEGY reset_schema populate_schema expected_dataset dataset xml_expected_dataset xml_dataset);
+@EXPORT_OK = qw(INSERT_LOAD_STRATEGY REFRESH_LOAD_STRATEGY reset_schema populate_schema expected_dataset dataset expected_xml_dataset xml_dataset);
 %EXPORT_TAGS = (all => \@EXPORT_OK);
 
 use constant INSERT_LOAD_STRATEGY => 0;
@@ -19,11 +19,35 @@ use constant REFRESH_LOAD_STRATEGY => 1;
 
 =head1 NAME
 
-Database test framework.
+DBUnit - Database test framework.
 
 =head1 SYNOPSIS
 
     use DBUnit ':all';
+
+    my $dbunit = DBUnit->new(connection_name => 'test');
+    $dbunit->reset_schema($script);
+    $dbunit->populate_schema($script);
+
+    $dbunit->dataset(
+        emp   => [empno => 1, ename => 'scott', deptno => 10],
+        emp   => [empno => 2, ename => 'john', deptno => 10],
+        bonus => [ename => 'scott', job => 'consultant', sal => 30],
+    );
+    #business logic here
+
+    $dbunit->expected_dataset(
+        emp   => [empno => 1, ename => 'scott', deptno => 10],
+        emp   => [empno => 2, ename => 'John'],
+        emp   => [empno => 2, ename => 'Peter'],
+    );
+
+    $dbunit->reset_sequence('emp_seq');
+
+    $dbunit->xml_dataset('t/file.xml');
+
+    $dbunit->expected_xml_dataset('t/file.xml');
+
 
 
 =head1 DESCRIPTION
@@ -38,7 +62,7 @@ None by default.
 reset_schema
 populate_schema
 expected_dataset
-xml_expected_dataset
+expected_xml_dataset
 dataset
 xml_dataset by tag 'all'
 
@@ -638,13 +662,13 @@ sub xml_dataset {
 }
 
 
-=item xml_expected_dataset dataset
+=item expected_xml_dataset dataset
 
 Loads xml file to expected dataset and validated it against the database schema.
 
 =cut
 
-sub xml_expected_dataset {
+sub expected_xml_dataset {
     my ($self, $file) = @_;
     my $xml = $self->load_xml($file);
     $self->apply_properties($xml->{properties});
@@ -754,8 +778,6 @@ L<DBIx::Connection>
 
 =head1 AUTHOR
 
-Adrian Witas, E<lt>adrian@webapp.strefa.pl</gt>
-
-See also 
+Adrian Witas, adrian@webapp.strefa.pl
 
 =cut

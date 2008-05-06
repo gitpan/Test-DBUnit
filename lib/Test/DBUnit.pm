@@ -11,69 +11,66 @@ use Carp 'confess';
 use Sub::Uplevel qw(uplevel);
 use Test::Builder;
 
-$VERSION = '0.01';
+$VERSION = '0.02';
 @EXPORT = qw(expected_dataset_ok dataset_ok expected_xml_dataset_ok xml_dataset_ok reset_schema_ok populate_schema_ok reset_sequence_ok set_refresh_load_strategy set_insert_load_strategy test_connection test_dbh);
 
 
 =head1 NAME
 
-Database test framework.
+Test::DBUnit - Database test framework.
 
 =head1 SYNOPSIS
 
-use DBIx::Connection;
+    use DBIx::Connection;
 
+    use Test::DBUnit connection_name => 'test';
+    use Test::More tests => $tests;
 
+    DBIx::Connection->new(
+        name     => 'test',
+        dsn      => $ENV{DB_TEST_CONNECTION},
+        username => $ENV{DB_TEST_USERNAME},
+        password => $ENV{DB_TEST_PASSWORD},
+    );
 
-use Test::More tests => $tests;
-use Test::DBUnit connection_name => 'test';
-DBIx::Connection->new(
-    name     => 'test',
-    dsn      => $ENV{DB_TEST_CONNECTION},
-    username => $ENV{DB_TEST_USERNAME},
-    password => $ENV{DB_TEST_PASSWORD},
-);
+    #or
 
-or
+    use Test::More;
+    use Test::DBUnit dsn => 'dbi:Oracle:localhost:1521/ORACLE_INSTANCE', username => 'user', password => 'password';
+    plan tests => $tests;
 
-use Test::More;
-use Test::DBUnit dsn => 'dbi:Oracle:localhost:1521/ORACLE_INSTANCE', username => 'user', password => 'password';
-plan tests => $tests;
+    my $connection = test_connection();
+    my $dbh = test_dbh();
 
+    reset_schema_ok('t/sql/create_schema.sql');
 
-my $connection = test_connection();
-my $dbh = test_dbh();
+    populate_schema_ok('t/sql/create_schema.sql');
 
-reset_schema_ok('t/sql/create_schema.sql');
+    xml_dataset_ok('test1');
 
-populate_schema_ok('t/sql/create_schema.sql');
+    #you database operations here
+    $connection->execute_statement("UPDATE ....");
 
-xml_dataset_ok('test1');
+    expected_xml_dataset_ok('test1');
 
-#you database operations here
-$connection->execute_statement("UPDATE ....");
+    #or
 
-expected_xml_dataset_ok('test1');
+    reset_sequence_ok('table1_seq1');
 
-or
+    dataset_ok(
+        table1 => [column1 => 'x', column1 => 'y'],
+        table1 => [column1 => 'x1_X', column1 => 'y1_X'],
+        ...
+        table2 => [column1 => 'x2, column1 => 'y2'],
+        table2 => [column1 => 'x1_N', column1 => 'y1_N'],
+    );
 
-reset_sequence_ok('table1_seq1');
+    #you database operations here
+    $connection->execute_statement("UPDATE ....");
 
-dataset_ok(
-    table1 => [column1 => 'x', column1 => 'y'],
-    table1 => [column1 => 'x1_X', column1 => 'y1_X'],
-    ...
-    table2 => [column1 => 'x2, column1 => 'y2'],
-    table2 => [column1 => 'x1_N', column1 => 'y1_N'],
-);
-
-
-#you database operations here
-$connection->execute_statement("UPDATE ....");
-
-expected_dataset_ok(
-    table1 => [column1 => 'z', column1 => 'y'],
-)
+    expected_dataset_ok(
+        table1 => [column1 => 'z', column1 => 'y'],
+    )
 
 
 =head1 DESCRIPTION
@@ -128,7 +125,7 @@ Database test framework to verify that your database data match expected set of 
         bonus => [ename => "scott", job => "project manager", sal => "20"],
     )
     or
-    xml_expected_dataset_ok('test1');
+    expected_xml_dataset_ok('test1');
     t/test_unit.test1-result.xml #given that you testing module is t/test_unit.t
     <?xml version='1.0' encoding='UTF-8'?>
     <dataset>
@@ -480,7 +477,7 @@ expect t/sub_dir/001_test.test1.xml file.
         my $validation;
         my $ok;
         eval {
-            $validation = $dbunit->xml_expected_dataset($xm_file);
+            $validation = $dbunit->expected_xml_dataset($xm_file);
             $ok = 1 unless $validation;
         };
         my $explanation = "";
@@ -628,8 +625,6 @@ L<DBIx::Connection>
 
 =head1 AUTHOR
 
-Adrian Witas, E<lt>adrian@webapp.strefa.pl</gt>
-
-See also 
+Adrian Witas, adrian@webapp.strefa.pl
 
 =cut

@@ -1,4 +1,8 @@
 Revision history for Perl extension Test::DBUnit.
 
+0.02  Mon May 05 2008
+    - Fix pod documentation
+    Change method name: DBUnit::xml_expected_dataset to DBUnit::expected_xml_dataset
+    
 0.01  Mon May 05 2008
     -  Initial import to CPAN.

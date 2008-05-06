@@ -306,7 +306,7 @@ SKIP: {
         $connection->execute_statement("UPDATE emp SET ename = ? WHERE empno = ?", 'John', 2);
         $connection->execute_statement("UPDATE emp SET ename = ? WHERE empno = ?", 'Mark', 3);
 
-        ok(! $dbunit->xml_expected_dataset('t/dbunit.resultset.xml'), 'should have all expected data');
+        ok(! $dbunit->expected_xml_dataset('t/dbunit.resultset.xml'), 'should have all expected data');
     }
     
     ok(!$dbunit->dataset(emp => []), 'should sunc database to dataset');
