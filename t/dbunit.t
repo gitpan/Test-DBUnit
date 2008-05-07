@@ -113,7 +113,8 @@ VALUES(20, \'IT\', \'Katowice;\')',
 
 SKIP: {
     
-    skip('missing env varaibles DB_TEST_CONNECTION, DB_TEST_USERNAME DB_TEST_PASSWORD', 13)
+    skip('missing env varaibles DB_TEST_CONNECTION, DB_TEST_USERNAME DB_TEST_PASSWORD', 27)
+
       unless $ENV{DB_TEST_CONNECTION};
     use DBIx::Connection;
     my $connection = DBIx::Connection->new(

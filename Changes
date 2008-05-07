@@ -1,6 +1,10 @@
 Revision history for Perl extension Test::DBUnit.
 
-0.02  Mon May 05 2008
+0.03  Wen May 07 2008
+    - Fix skip in t/dbunit.t
+    - Reformating pod
+
+0.02  Tue May 06 2008
     - Fix pod documentation
     Change method name: DBUnit::xml_expected_dataset to DBUnit::expected_xml_dataset
     
