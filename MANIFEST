@@ -1,10 +1,25 @@
 Changes
+examples/dbunit.t
+examples/dbunit.test1-result.xml
+examples/dbunit.test1.xml
 lib/DBUnit.pm
 lib/Test/DBUnit.pm
 Makefile.PL
 MANIFEST
+META.yml			Module meta-data (added by MakeMaker)
 README
+t/dbunit.dataset.xml
+t/dbunit.resultset.xml
 t/dbunit.t
+t/pod.t
+t/pod_coverage.t
+t/sql/MySQL/create_schema.sql
+t/sql/MySQL/populate_schema.sql
+t/sql/Oracle/create_schema.sql
+t/sql/Oracle/populate_schema.sql
+t/sql/PostgreSQL/create_schema.sql
+t/sql/PostgreSQL/populate_schema.sql
 t/test/dbunit.t
+t/test/dbunit.test1-result.xml
+t/test/dbunit.test1.xml
 t/test/skip.t
-META.yml                                 Module meta-data (added by MakeMaker)

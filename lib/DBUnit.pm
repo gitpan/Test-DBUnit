@@ -36,7 +36,7 @@ DBUnit - Database test framework.
     );
     #business logic here
 
-    $dbunit->expected_dataset(
+    my $diffrences = $dbunit->expected_dataset(
         emp   => [empno => 1, ename => 'scott', deptno => 10],
         emp   => [empno => 2, ename => 'John'],
         emp   => [empno => 2, ename => 'Peter'],
@@ -58,7 +58,6 @@ It has ability to populate dataset and expected set from xml files.
 =head2 EXPORT
 
 None by default.
-
 reset_schema
 populate_schema
 expected_dataset
@@ -143,6 +142,162 @@ sub reset_schema {
 }
 
 
+=item populate_schema
+
+Populates database schema.
+
+=cut
+
+sub populate_schema {
+    my ($self, $file_name) = @_;
+    my @rows = $self->rows_to_insert(_load_file_content($file_name));
+    my $connection = DBIx::Connection->connection($self->connection_name);
+    for my $sql (@rows) {
+        $connection->do($sql);
+    }
+    $connection->close();
+}
+
+
+=item dataset
+
+Synchronizes/populates database to the passed in dataset.
+
+    $dbunit->dataset(
+        table1 => [], #this deletes all data from table1 (DELETE FROM table1)
+        table2 => [], #this deletes all data from table2 (DELETE FROM table2)
+        table1 => [col1 => 'va1', col2 => 'val2'], #this insert or update depend on strategy
+        table1 => [col1 => 'xval1', col2 => 'xval2'],
+    )
+
+=cut
+
+sub dataset {
+    my ($self, @dataset) = @_;
+    my $connection = DBIx::Connection->connection($self->connection_name);
+    $self->delete_data(\@dataset, $connection);
+    my $operation = ($self->load_strategy eq INSERT_LOAD_STRATEGY()) ? 'insert' : 'merge';
+    for  (my $i = 0; $i < $#dataset; $i += 2) {
+        my $table = $dataset[$i];
+        my $data = $dataset[$i + 1];
+        next unless @$data;
+        $self->$operation($table, {@$data}, $connection);
+    }
+    $connection->close();
+}
+
+
+=item expected_dataset
+
+Validates database schema against passed in dataset.
+Return differences report or undef is there are not discrepancies.
+
+    my $differences = $dbunit->expected_dataset(
+        table1 => [col1 => 'va1', col2 => 'val2'],
+        table1 => [col1 => 'xval1', col2 => 'xval2'],
+    );
+
+=cut
+
+sub expected_dataset {
+    my ($self, @dataset) = @_;
+    my $operation = ($self->load_strategy eq INSERT_LOAD_STRATEGY())
+        ? 'expected_dataset_for_insert_load_strategy'
+        : 'expected_dataset_for_refresh_load_strategy';
+    my $connection = DBIx::Connection->connection($self->connection_name);
+    my $result = $self->$operation(\@dataset, $connection);
+    $connection->close();
+    $result;
+}
+
+
+=item reset_sequence
+
+Resets passed in sequence
+
+=cut
+
+sub reset_sequence {
+    my ($self, $sequence_name) = @_;
+    my $connection = DBIx::Connection->connection($self->connection_name);
+    $connection->reset_sequence($sequence_name);
+    $connection->close();
+}
+
+
+=item xml_dataset
+
+Loads xml file to dataset and populate/synchronize it to the database schema.
+Takes xml file as parameter.
+
+    <dataset load_strategy="INSERT_LOAD_STRATEGY" reset_sequences="emp_seq">
+        <emp ename="scott" deptno="10" job="project manager" />
+        <emp ename="john"  deptno="10" job="engineer" />
+        <emp ename="mark"  deptno="10" job="sales assistant" />
+        <bonus ename="scott" job="project manager" sal="20" />
+    </dataset>
+
+=cut
+
+sub xml_dataset {
+    my ($self, $file) = @_;
+    my $xml = $self->load_xml($file);
+    $self->apply_properties($xml->{properties});
+    $self->dataset(@{$xml->{dataset}});
+}
+
+
+=item expected_xml_dataset
+
+Takes xml file as parameter.
+Return differences report or undef is there are not discrepancies.
+
+=cut
+
+sub expected_xml_dataset {
+    my ($self, $file) = @_;
+    my $xml = $self->load_xml($file);
+    $self->apply_properties($xml->{properties});
+    $self->expected_dataset(@{$xml->{dataset}});
+}
+
+
+=item apply_properties
+
+Sets properties for this object.
+
+=cut
+
+sub apply_properties {
+    my ($self, $properties) = @_;
+    my $strategy = $properties->{load_strategy};
+    $self->set_load_strategy(__PACKAGE__->$strategy);
+    my $reset_sequences = $properties->{reset_sequences};
+    if ($reset_sequences) {
+        my @seqs = split /,/, $reset_sequences;
+        for my $sequence_name (@seqs) {
+            $self->reset_sequence($sequence_name);
+        }
+    }
+}
+
+
+=back
+
+=head2 PRIVATE METHODS
+
+=over
+
+=item rows_to_insert
+
+=cut
+
+sub rows_to_insert {
+    my ($self, $sql) = @_;
+    map  {($_ =~ /\w+/ ?  $_ .')' : ())} split qr{\)\W*;}, $sql;
+   
+}
+
 
 =item drop_objects
 
@@ -190,7 +345,6 @@ sub create_tables {
 
 Returns list of pairs values('object_type object_name', create_sql, ..., 'object_typeN object_nameN', create_sqlN)
 
-TODO - extend detection for complex plsql blocks
 =cut
 
 sub objects_to_create {
@@ -217,66 +371,10 @@ sub objects_to_create {
         }
 
         $object = $i++ unless $object;
-        $sql_statement =~ s/^[\n\r\s]+// if ($sql_statement =~ m/^[\n\r\s]+/);
+        $sql_statement =~ s/^[\n\r\s]+//m if ($sql_statement =~ m/^[\n\r\s]+/m);
         push @result, $object, $sql_statement;
     }
     @result;
-}
-
-
-=item populate_schema
-
-Populates schema
-
-=cut
-
-sub populate_schema {
-    my ($self, $file_name) = @_;
-    my @rows = $self->rows_to_insert(_load_file_content($file_name));
-    my $connection = DBIx::Connection->connection($self->connection_name);
-    for my $sql (@rows) {
-        $connection->do($sql);
-    }
-    $connection->close();
-}
-
-
-=item rows_to_insert
-
-=cut
-
-sub rows_to_insert {
-    my ($self, $sql) = @_;
-    map  {($_ =~ /\w+/ ?  $_ .')' : ())} split qr{\)\W*;}, $sql;
-   
-}
-
-
-=item dataset
-
-Synchronizes/populates database to the passed in dataset.
-
-dataset(
-    table1 => [], #this deletes all data from table1 (DELETE FROM table1)
-    table2 => [], #this deletes all data from table2 (DELETE FROM table2)
-    table1 => [col1 => 'va1', col2 => 'val2'], #this insert or update depend on strategy
-    table1 => [col1 => 'xval1', col2 => 'xval2'],
-)
-
-=cut
-
-sub dataset {
-    my ($self, @dataset) = @_;
-    my $connection = DBIx::Connection->connection($self->connection_name);
-    $self->delete_data(\@dataset, $connection);
-    my $operation = ($self->load_strategy eq INSERT_LOAD_STRATEGY()) ? 'insert' : 'merge';
-    for  (my $i = 0; $i < $#dataset; $i += 2) {
-        my $table = $dataset[$i];
-        my $data = $dataset[$i + 1];
-        next unless @$data;
-        $self->$operation($table, {@$data}, $connection);
-    }
-    $connection->close();
 }
 
 
@@ -342,6 +440,8 @@ sub has_primary_key_values {
 
 =item primary_key_values
 
+Returns primary key values, Takes table name, hash ref as fields of values, db connection object.
+
 =cut
 
 sub primary_key_values {
@@ -374,6 +474,8 @@ sub delete_data {
 
 =item tables_to_delete
 
+Returns list of tables to delete.
+
 =cut
 
 sub tables_to_delete {
@@ -391,7 +493,7 @@ sub tables_to_delete {
 }
 
 
-=item tables_to_delete_explicitly
+=item empty_tables_to_delete
 
 Returns list of table that are part of dataset table and are represented by table without attributes
 
@@ -411,24 +513,6 @@ sub empty_tables_to_delete {
         push @result, $dataset->[$i]
     }
     @result;
-}
-
-
-=item expected_dataset
-
-Validates database schema against passed in dataset.
-
-=cut
-
-sub expected_dataset {
-    my ($self, @dataset) = @_;
-    my $operation = ($self->load_strategy eq INSERT_LOAD_STRATEGY())
-        ? 'expected_dataset_for_insert_load_strategy'
-        : 'expected_dataset_for_refresh_load_strategy';
-    my $connection = DBIx::Connection->connection($self->connection_name);
-    my $result = $self->$operation(\@dataset, $connection);
-    $connection->close();
-    $result;
 }
 
 
@@ -564,6 +648,8 @@ sub compare_datasets {
 
 =item format_values
 
+Converts passed in list to string.
+
 =cut
 
 sub format_values {
@@ -626,81 +712,6 @@ sub primary_key_hash_value {
     $result;
 }
 
-
-=item reset_sequence
-
-Resets passed in sequence
-
-=cut
-
-sub reset_sequence {
-    my ($self, $sequence_name) = @_;
-    my $connection = DBIx::Connection->connection($self->connection_name);
-    $connection->reset_sequence($sequence_name);
-    $connection->close();
-}
-
-
-=item xml_dataset
-
-Loads xml file to dataset and populate/synchronize it to the database schema.
-
-<dataset load_strategy="INSERT_LOAD_STRATEGY" reset_sequences="emp_seq">
-    <emp ename="scott" deptno="10" job="project manager" />
-    <emp ename="john"  deptno="10" job="engineer" />
-    <emp ename="mark"  deptno="10" job="sales assistant" />
-    <bonus ename="scott" job="project manager" sal="20" />
-</dataset>
-
-=cut
-
-sub xml_dataset {
-    my ($self, $file) = @_;
-    my $xml = $self->load_xml($file);
-    $self->apply_properties($xml->{properties});
-    $self->dataset(@{$xml->{dataset}});
-}
-
-
-=item expected_xml_dataset dataset
-
-Loads xml file to expected dataset and validated it against the database schema.
-
-=cut
-
-sub expected_xml_dataset {
-    my ($self, $file) = @_;
-    my $xml = $self->load_xml($file);
-    $self->apply_properties($xml->{properties});
-    $self->expected_dataset(@{$xml->{dataset}});
-}
-
-
-=item apply_properties
-
-=cut
-
-sub apply_properties {
-    my ($self, $properties) = @_;
-    my $strategy = $properties->{load_strategy};
-    if ($strategy) {
-        $self->set_load_strategy(INSERT_LOAD_STRATEGY)
-            if ($strategy eq "INSERT_LOAD_STRATEGY");
-                
-        $self->set_load_strategy(REFRESH_LOAD_STRATEGY)
-            if ($strategy eq "REFRESH_LOAD_STRATEGY");
-    }
-    
-    my $reset_sequences = $properties->{reset_sequences};
-    if ($reset_sequences) {
-        my @seqs = split /,/, $reset_sequences;
-        for my $sequence_name (@seqs) {
-            $self->reset_sequence($sequence_name);
-        }
-    }
-    
-
-}
 
 
 =item xml_dataset_handler
@@ -766,11 +777,17 @@ __END__
 
 =back
 
-=head1 COPYRIGHT
+=head1 TODO
+
+Extend detection for complex plsql blocks in the objects_to_create method.
+
+=head1 COPYRIGHT AND LICENSE
 
 The DBUnit module is free software. You may distribute under the terms of
 either the GNU General Public License or the Artistic License, as specified in
 the Perl README file.
+
+
 
 =head1 SEE ALSO
 
