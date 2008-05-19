@@ -1,6 +1,6 @@
 
 use ExtUtils::MakeMaker;
-auto_manifest;
+
 WriteMakefile(
     NAME         => 'Test::DBUnit',
     VERSION_FROM => 'lib/Test/DBUnit.pm',
@@ -14,5 +14,4 @@ WriteMakefile(
     },
     dist         => { COMPRESS => 'gzip', SUFFIX => 'gz' },
     clean        => { FILES => 'MANIFEST.bak' },
-    
 );

@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use vars qw(@EXPORT_OK %EXPORT_TAGS $VERSION);
 
-$VERSION = '0.02';
+$VERSION = '0.05';
 use Abstract::Meta::Class ':all';
 use base 'Exporter';
 use Carp 'confess';
@@ -19,7 +19,7 @@ use constant REFRESH_LOAD_STRATEGY => 1;
 
 =head1 NAME
 
-DBUnit - Database test framework.
+DBUnit - Database test API
 
 =head1 SYNOPSIS
 
