@@ -4,13 +4,17 @@ examples/dbunit.test1-result.xml
 examples/dbunit.test1.xml
 lib/DBUnit.pm
 lib/Test/DBUnit.pm
+lob.t
 Makefile.PL
 MANIFEST
 META.yml			Module meta-data (added by MakeMaker)
 README
+t/bin/data1.bin
+t/bin/data2.bin
 t/dbunit.dataset.xml
 t/dbunit.resultset.xml
 t/dbunit.t
+t/lob.t
 t/pod.t
 t/pod_coverage.t
 t/sql/MySQL/create_schema.sql
@@ -22,4 +26,7 @@ t/sql/PostgreSQL/populate_schema.sql
 t/test/dbunit.t
 t/test/dbunit.test1-result.xml
 t/test/dbunit.test1.xml
+t/test/lob.t
+t/test/lob.test1-result.xml
+t/test/lob.test1.xml
 t/test/skip.t

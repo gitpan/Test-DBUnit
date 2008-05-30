@@ -11,7 +11,7 @@ use Carp 'confess';
 use Sub::Uplevel qw(uplevel);
 use Test::Builder;
 
-$VERSION = '0.05';
+$VERSION = '0.06';
 @EXPORT = qw(expected_dataset_ok dataset_ok expected_xml_dataset_ok xml_dataset_ok reset_schema_ok populate_schema_ok reset_sequence_ok set_refresh_load_strategy set_insert_load_strategy test_connection test_dbh);
 
 
@@ -283,6 +283,64 @@ Note that for MySQL reset sequence the test_table_name must be empty.
         emp => [empno => 1, ename => "John", deptno => "10", job => "project manager"],
         emp => [empno => 2, ename => "Scott", deptno => "10", job => "project manager"]
     )
+
+=head2 Working with LOBs
+
+For handling very large datasets, the DB vendors provide the LOB (large object) data types.
+You may use this features, and this module allows you test it.
+
+=head3 LOBs tests with an Oracle
+
+An Oracle BLOB data type that contains binary data with a maximum size of 4 gigabytes. 
+It is advisable to store blob size in separate column to optimize fetch process.(doc_size)
+
+    CREATE TABLE image(id NUMBER, name VARCHAR2(100), doc_size NUMBER, blob_content BLOB);
+
+    dataset_ok(
+        emp   => [empno => 1, ename => 'scott', deptno => 10],
+        image  => [id => 1, name => 'Moon'
+            blob_content => {file => 'data/chart1.jpg', size_column => 'doc_size'}
+        ]
+    );
+
+    .....
+
+    expected_dataset_ok(
+        emp   => [empno => 1, ename => 'scott', deptno => 10],
+        image  => [id => 1, name => 'Moon'
+            blob_content => {file => 'data/chart2.jpg', size_column => 'doc_size'}
+        ]
+    );
+
+
+=head3 LOBs tests with an PostgreSQL
+
+PostgreSQL has a large object facility, but in this case the tested table doesn't conatin LOBs type
+but keeps reference to lob_id, created by lo_creat PostgreSQL function.
+It is required to store blob size in separate column to be able fetch blob.(doc_size)
+
+    CREATE TABLE image(id NUMERIC, name VARCHAR(100), doc_size NUMERIC, blob_content oid)
+
+    dataset_ok(
+        emp   => [empno => 1, ename => 'scott', deptno => 10],
+        image  => [id => 1, name => 'Moon'
+            blob_content => {file => 'data/chart1.jpg', size_column => 'doc_size'}
+        ]
+    );
+
+
+=head3 LOBs test with MySQL
+
+In MySQL, binary LOBs are just fields in the table, so storing blob size is optional.
+
+    CREATE TABLE lob_test(id NUMERIC, name VARCHAR(100), doc_size NUMERIC, blob_content LONGBLOB)
+
+    dataset_ok(
+        emp   => [empno => 1, ename => 'scott', deptno => 10],
+        image  => [id => 1, name => 'Moon'
+            blob_content => {file => 'data/chart1.jpg', size_column => 'doc_size'}
+        ]
+    );
 
 
 =head2 EXPORT

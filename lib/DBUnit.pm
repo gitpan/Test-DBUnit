@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use vars qw(@EXPORT_OK %EXPORT_TAGS $VERSION);
 
-$VERSION = '0.05';
+$VERSION = '0.06';
 use Abstract::Meta::Class ':all';
 use base 'Exporter';
 use Carp 'confess';
@@ -49,6 +49,35 @@ DBUnit - Database test API
     $dbunit->expected_xml_dataset('t/file.xml');
 
 
+B<Lob support (Large Object)>
+
+This code snippet will populate dataase blob_content column with the binary data pointed by file attribute,
+size of the lob will be stored in size_column
+
+    $dbunit->dataset(
+        emp   => [empno => 1, ename => 'scott', deptno => 10],
+        image  => [id => 1, name => 'Moon'
+            blob_content => {file => 'data/image1.jpg', size_column => 'doc_size'}
+        ]
+    );
+
+
+This code snippet will valiate dataase binary data with expeced content pointed by file attribute,
+
+    $dbunit->expected_dataset(
+        emp   => [empno => 1, ename => 'scott', deptno => 10],
+        image  => [id => 1, name => 'Moon'
+            blob_content => {file => 'data/image1.jpg', size_column => 'doc_size'}
+        ]
+    );
+    or xml
+    <dataset>
+        <emp .../>
+        <image id=>"1" name="Moon">
+            <blob_content  file="t/bin/data1.bin" size_column="doc_size" />
+        </image>
+    </dataset>
+
 
 =head1 DESCRIPTION
 
@@ -90,17 +119,6 @@ In this scenario only rows in expected dataset are tested.
 =cut
 
 has '$.load_strategy' => (default => INSERT_LOAD_STRATEGY());
-
-
-=item primary_key_values_stash
-
-This option is stored as hash_ref:
-the key is the table name with the schema prefix
-and value is stored as array ref of primary key's values.
-
-=cut
-
-has '%.primary_key_values_stash';
 
 
 =item primary_key_definition_cache
@@ -179,9 +197,11 @@ sub dataset {
     my $operation = ($self->load_strategy eq INSERT_LOAD_STRATEGY()) ? 'insert' : 'merge';
     for  (my $i = 0; $i < $#dataset; $i += 2) {
         my $table = $dataset[$i];
-        my $data = $dataset[$i + 1];
-        next unless @$data;
-        $self->$operation($table, {@$data}, $connection);
+        my $lob_values = $self->_extract_lob_values($dataset[$i + 1]);
+        my $data = $self->_extract_column_values($dataset[$i + 1]);
+        next unless %$data;
+        $self->$operation($table, $data, $connection);
+        $self->_update_lobs($lob_values, $table, $data, $connection);
     }
     $connection->close();
 }
@@ -401,7 +421,14 @@ Merges passed in data
 
 sub merge {
     my ($self, $table, $field_values, $connection) = @_;
-    my $operation  = ($self->has_primary_key_values($table, $field_values, $connection)) ? 'update' : 'insert'; 
+    my %pk_values = $self->primary_key_values($table, $field_values, $connection);
+    my $values = (%pk_values)  ? \%pk_values : $field_values;
+    my $exists = $self->_exists_in_database($table, $values, $connection);
+    if($exists) {
+        my $pk_columns = $self->primary_key_definition_cache->{$table};
+        return if(! $pk_columns || !(@$pk_columns));
+    }
+    my $operation  = $exists ? 'update' : 'insert'; 
     $self->$operation($table, $field_values, $connection);
 }
 
@@ -524,19 +551,110 @@ Validates expected dataset for the insert load strategy.
 
 sub expected_dataset_for_insert_load_strategy {
     my ($self, $exp_dataset, $connection) = @_;
-    my %tables = (@$exp_dataset);
-    my %tables_rows = (map { $_ => 0}keys %tables);
-    my $tables_rows = $self->retrive_tables_data($connection, keys %tables);
+    my $tables = $self->_exp_table_with_column($exp_dataset, $connection);
+    my %tables_rows = (map { ($_ => 0) } keys %$tables);
+    
+    my $tables_rows = $self->retrive_tables_data($connection, $tables);
     for (my $i = 0; $i < $#{$exp_dataset}; $i += 2) {
         my $table_name = $exp_dataset->[$i];
-        my %values = @{$exp_dataset->[$i + 1]};
-        next unless %values;
+        my %lob_values = $self->_extract_lob_values($exp_dataset->[$i + 1]);
+        my %values = $self->_extract_column_values($exp_dataset->[$i + 1]);
+        next if(! %values && !%lob_values);
         $tables_rows{$table_name}++;
         my $pk_columns = $self->primary_key_definition_cache->{$table_name} ||= [$connection->primary_key_columns($table_name)];
-        my $result = $self->validate_datasets($tables_rows->{$table_name}, \%values, $pk_columns, $table_name);
+        my $result = $self->validate_dataset($tables_rows->{$table_name}, \%values, $pk_columns, $table_name, $connection, \%lob_values);
         return $result if $result;
     }
     $self->validate_number_of_rows(\%tables_rows, $connection);
+}
+
+
+=item _update_lobs
+
+Updates lobs.
+
+=cut
+
+sub _update_lobs {
+    my ($self, $lob_values, $table_name, $data, $connection) = @_;
+    my $pk_columns = $self->primary_key_definition_cache->{$table_name} ||= [$connection->primary_key_columns($table_name)];
+    my $fields_values = ($pk_columns && @$pk_columns) ? {map {($_ => $data->{$_})}  @$pk_columns} : $data;
+    foreach my $lob_column (keys %$lob_values) {
+        my $lob_attr = $lob_values->{$lob_column};
+        my $lob_content = $lob_attr->{content};
+        $connection->update_lob($table_name => $lob_column, $lob_content, $fields_values, $lob_attr->{size_column});
+    }
+}
+
+=item _exp_table_with_column
+
+Return hash ref of the tables with it columns.
+
+=cut
+
+sub _exp_table_with_column {
+    my ($self, $dataset, $connection) = @_;
+    my $result = {};
+    for (my $i = 0; $i < $#{$dataset}; $i += 2) {
+        my $columns = $result->{$dataset->[$i]} ||= {};
+        my $data = $self->_extract_column_values($dataset->[$i + 1]);
+        $columns->{$_} = 1 for keys %$data;
+    }
+
+    if ($connection) {
+        foreach my $table_name (keys %$result) {
+            my $pk_columns = $self->primary_key_definition_cache->{$table_name} ||= [$connection->primary_key_columns($table_name)];
+            my $columns = $result->{$table_name} ||= {};
+            $columns->{$_} = 1 for @$pk_columns;
+        }
+    }
+    
+    foreach my $k(keys %$result) {
+        $result->{$k} = [sort keys %{$result->{$k}}];
+    }
+    $result;
+}
+
+
+=item _extract_column_values
+
+=cut
+
+sub _extract_column_values {
+    my ($self, $dataset) = @_;
+    my %values = @$dataset;
+    my $result = {map {(! ref($values{$_}) ? ($_ => $values{$_}) : ())} keys %values};
+    wantarray ? (%$result) : $result;
+}
+
+
+=item _extract_column_values
+
+=cut
+
+sub _extract_lob_values {
+    my ($self, $dataset) = @_;
+    my %values = @$dataset;
+    my $result = {map {(ref($values{$_}) ? ($_ => $values{$_}) : ())} keys %values};
+    $self->_process_lob($result);
+    wantarray ? (%$result) : $result;
+}
+
+
+=item _process_lob
+
+=cut
+
+sub _process_lob {
+    my ($self, $lobs) = @_;
+    return if(! $lobs || !(keys %$lobs));
+    for my $k(keys %$lobs) {
+        my $lob_attr= $lobs->{$k};
+        my $content = '';
+        if($lob_attr->{file}) {
+            $lob_attr->{content} = _load_file_content($lob_attr->{file});
+        }
+    }
 }
 
 
@@ -556,16 +674,22 @@ sub validate_number_of_rows {
 }
 
 
-=item validate_datasets
+=item validate_dataset
 
 Validates passed exp dataset against fetched rows.
 Return undef if there are not difference otherwise returns validation error.
 
 =cut
 
-sub validate_datasets {
-    my ($self, $rows, $exp_dataset, $pk_columns, $table_name) = @_;
+sub validate_dataset {
+    my ($self, $rows, $exp_dataset, $pk_columns, $table_name, $connection, $lob_values) = @_;
     my $hash_key = primary_key_hash_value($pk_columns, $exp_dataset);
+
+    if ($lob_values && %$lob_values) {
+        my $result = $self->validate_lobs($lob_values, $table_name, $pk_columns, $exp_dataset, $connection);
+        return $result if $result;
+    }
+
     my @columns = keys %$exp_dataset;
     if ($hash_key) {
         my $result = compare_datasets($rows->{$hash_key}, $exp_dataset, $table_name, @columns);
@@ -590,6 +714,28 @@ sub validate_datasets {
 }
 
 
+=item validate_lobs
+
+Validates lob values
+
+=cut
+
+sub validate_lobs {
+    my ($self, $lob_values, $table_name, $pk_column, $exp_dataset, $connection) = @_;
+    return if(! $lob_values || ! (%$lob_values));
+    my $fields_value = ($pk_column && @$pk_column)
+        ? {map {($_ => $exp_dataset->{$_})} @$pk_column}
+        : $exp_dataset;
+    for my $lob_column(keys %$lob_values) {
+        my $lob_attr = $lob_values->{$lob_column};
+        my $exp_lob_content = $lob_attr->{content};
+        my $lob_content = $connection->fetch_lob($table_name => $lob_column, $fields_value, $lob_attr->{size_column});
+        return "found difference at lob value ${table_name}.${lob_column}: " . format_values($fields_value, keys %$fields_value)
+            if(length($exp_lob_content) ne length($lob_content) || $exp_lob_content ne $lob_content);
+    }
+}
+
+
 =item expected_dataset_for_refresh_load_strategy
 
 Validates expected dataset for the refresh load strategy.
@@ -600,9 +746,10 @@ sub expected_dataset_for_refresh_load_strategy {
     my ($self, $exp_dataset, $connection) = @_;
     for (my $i = 0; $i < $#{$exp_dataset}; $i += 2) {
         my $table_name = $exp_dataset->[$i];
-        my %values = @{$exp_dataset->[$i + 1]};
+        my %values = $self->_extract_column_values($exp_dataset->[$i + 1]);
+        my %lob_values = $self->_extract_lob_values($exp_dataset->[$i + 1]);
         my $pk_columns = $self->primary_key_definition_cache->{$table_name} ||= [$connection->primary_key_columns($table_name)];
-        my $result = $self->validate_expexted_dataset(\%values, $pk_columns, $table_name, $connection);
+        my $result = $self->validate_expexted_dataset(\%values, $pk_columns, $table_name, $connection, \%lob_values);
         return $result if $result;
     }
 }
@@ -616,10 +763,16 @@ Return undef if there are not difference otherwise returns validation error.
 =cut
 
 sub validate_expexted_dataset {
-    my ($self, $exp_dataset, $pk_columns, $table_name, $connection) = @_;
+    my ($self, $exp_dataset, $pk_columns, $table_name, $connection, $lob_values) = @_;
     my @condition_columns = (@$pk_columns ? @$pk_columns : keys %$exp_dataset);
+    if ($lob_values && %$lob_values) {
+        my $result = $self->validate_lobs($lob_values, $table_name, \@condition_columns, $exp_dataset, $connection);
+        return $result if $result;
+    }
+        
     my $where_clause = join(" AND ", map { $_ ." = ? " } @condition_columns);
-    my $record = $connection->record("SELECT * FROM ${table_name} WHERE ". $where_clause, map    { $exp_dataset->{$_} } @condition_columns);
+    my @columns = keys %$exp_dataset;
+    my $record = $connection->record("SELECT " . join(",", @columns) . " FROM ${table_name} WHERE ". $where_clause, map    { $exp_dataset->{$_} } @condition_columns);
     if(grep { defined $_ } values %$record) {
         return compare_datasets($record, $exp_dataset, $table_name, keys %$exp_dataset);
     }
@@ -665,10 +818,10 @@ Returns retrieved data for passed in tables
 =cut
 
 sub retrive_tables_data {
-    my ($self, $connection, @tables) = @_;
+    my ($self, $connection, $tables) = @_;
     my $result = {};
-    for my $table_name (@tables) {
-        $result->{$table_name} = $self->retrive_table_data($connection, $table_name);
+    for my $table_name (keys %$tables) {
+        $result->{$table_name} = $self->retrive_table_data($connection, $table_name, $tables->{$table_name});
     }
     $result;
 }
@@ -681,10 +834,10 @@ Returns retrieved data for passed in table.
 =cut
 
 sub retrive_table_data {
-    my ($self, $connection, $table_name) = @_;
+    my ($self, $connection, $table_name, $columns) = @_;
     my $counter = 0;
     my $pk_columns = $self->primary_key_definition_cache->{$table_name} ||= [$connection->primary_key_columns($table_name)];
-    my $cursor = $connection->query_cursor(sql => "SELECT * FROM ${table_name}");
+    my $cursor = $connection->query_cursor(sql => "SELECT " . join(",", @$columns) . " FROM ${table_name}");
     my $result_set = $cursor->execute();
     my $has_pk = !! @$pk_columns;
     my $result = {};
@@ -735,15 +888,38 @@ sub primary_key_hash_value {
             );
             $xml->handler('*', sub {
                 my ($self, $element, $parent) = @_;
+                my $parent_name = $parent->name;
                 my $attributes = $element->attributes;
-                my $children_result = $parent->children_array_result;
-                my $result = $parent->children_result;
-                push @$children_result, $element->name => [map { $_ => $attributes->{$_}} sort keys %$attributes];
+                if($parent_name eq 'dataset') {
+                    my $children_result = $element->children_result || {};
+                    my $parent_result = $parent->children_array_result;
+                    my $result = $parent->children_result;
+                    push @$parent_result, $element->name => [%$children_result, map { $_ => $attributes->{$_}} sort keys %$attributes];
+                } else {
+                    my $children_result = $parent->children_hash_result;
+                    $children_result->{$element->name} = {%$attributes};
+                }
             });
         }
         $xml;
     }
 }
+
+
+=item _exists_in_database
+
+Check is rows exists in database.
+Takes table name, hash ref of field values, connection object
+
+=cut
+
+sub _exists_in_database {
+    my ($self, $table_name, $field_values, $connection) = @_;
+    my $sql = "SELECT 1 AS cnt FROM ${table_name} WHERE ".join(" AND ", map {($_ . " = ? ")} sort keys %$field_values);
+    my $record = $connection->record($sql,  map {$field_values->{$_}} sort keys %$field_values);
+    $record && $record->{cnt};
+}
+
 
 =item load_xml
 
@@ -765,6 +941,7 @@ sub load_xml {
 sub _load_file_content {
     my $file_name = shift;
     open my $fh, '<', $file_name or confess "cant open file ${file_name}";
+    binmode $fh;
     local $/ = undef;
     my $content = <$fh>;
     close $fh;

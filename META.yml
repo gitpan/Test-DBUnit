@@ -1,5 +1,5 @@
 name:         Test-DBUnit
-version:      0.05
+version:      0.06
 author:
   - 'Adrian Witas <adrian@webapp.strefa.pl>'
 abstract: Database test framework
@@ -8,7 +8,7 @@ resources:
   license: http://dev.perl.org/licenses/
 requires:
     Abstract::Meta::Class:                    0
-    DBIx::Connection:                         0
+    DBIx::Connection:                         0.05
     Simple::SAX::Serializer:                  0
 build_requires:
     Test::Pod:                                0

@@ -48,4 +48,9 @@ CREATE TABLE seq_generator
 );
 
 
-
+CREATE TABLE lob_test(
+id NUMERIC,
+name VARCHAR(100),
+doc_size NUMERIC,
+blob_content LONGBLOB
+);

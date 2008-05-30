@@ -56,3 +56,11 @@ CREATE TABLE seq_generator
   pk_column VARCHAR2(30),
   value_column NUMBER
 );
+
+
+CREATE TABLE lob_test(
+id NUMBER,
+name VARCHAR2(100),
+doc_size NUMBER,
+blob_content BLOB
+);
