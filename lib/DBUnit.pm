@@ -4,7 +4,8 @@ use strict;
 use warnings;
 use vars qw(@EXPORT_OK %EXPORT_TAGS $VERSION);
 
-$VERSION = '0.06';
+$VERSION = '0.07';
+
 use Abstract::Meta::Class ':all';
 use base 'Exporter';
 use Carp 'confess';
@@ -36,7 +37,7 @@ DBUnit - Database test API
     );
     #business logic here
 
-    my $diffrences = $dbunit->expected_dataset(
+    my $differences = $dbunit->expected_dataset(
         emp   => [empno => 1, ename => 'scott', deptno => 10],
         emp   => [empno => 2, ename => 'John'],
         emp   => [empno => 2, ename => 'Peter'],
@@ -49,9 +50,9 @@ DBUnit - Database test API
     $dbunit->expected_xml_dataset('t/file.xml');
 
 
-B<Lob support (Large Object)>
+B<LOBs support (Large Object)>
 
-This code snippet will populate dataase blob_content column with the binary data pointed by file attribute,
+This code snippet will populate database blob_content column with the binary data pointed by file attribute,
 size of the lob will be stored in size_column
 
     $dbunit->dataset(
@@ -62,7 +63,7 @@ size of the lob will be stored in size_column
     );
 
 
-This code snippet will valiate dataase binary data with expeced content pointed by file attribute,
+This code snippet will validate database binary data with expected content pointed by file attribute,
 
     $dbunit->expected_dataset(
         emp   => [empno => 1, ename => 'scott', deptno => 10],
@@ -730,8 +731,8 @@ sub validate_lobs {
         my $lob_attr = $lob_values->{$lob_column};
         my $exp_lob_content = $lob_attr->{content};
         my $lob_content = $connection->fetch_lob($table_name => $lob_column, $fields_value, $lob_attr->{size_column});
-        return "found difference at lob value ${table_name}.${lob_column}: " . format_values($fields_value, keys %$fields_value)
-            if(length($exp_lob_content) ne length($lob_content) || $exp_lob_content ne $lob_content);
+        return "found difference at LOB value ${table_name}.${lob_column}: " . format_values($fields_value, keys %$fields_value)
+            if(length($exp_lob_content || '') ne length($lob_content || '') || ($exp_lob_content || '') ne ($lob_content || ''));
     }
 }
 
@@ -758,7 +759,7 @@ sub expected_dataset_for_refresh_load_strategy {
 =item validate_expexted_dataset
 
 Validates passed exp dataset against database schema
-Return undef if there are not difference otherwise returns validation error.
+Return undef if there is not difference otherwise returns validation error.
 
 =cut
 
@@ -772,7 +773,7 @@ sub validate_expexted_dataset {
         
     my $where_clause = join(" AND ", map { $_ ." = ? " } @condition_columns);
     my @columns = keys %$exp_dataset;
-    my $record = $connection->record("SELECT " . join(",", @columns) . " FROM ${table_name} WHERE ". $where_clause, map    { $exp_dataset->{$_} } @condition_columns);
+    my $record = $connection->record("SELECT " . (join(",", @columns) || '*') . " FROM ${table_name} WHERE ". $where_clause, map    { $exp_dataset->{$_} } @condition_columns);
     if(grep { defined $_ } values %$record) {
         return compare_datasets($record, $exp_dataset, $table_name, keys %$exp_dataset);
     }
@@ -784,7 +785,7 @@ sub validate_expexted_dataset {
 =item compare_datasets
 
 Compares two dataset hashes using passed in keys
-Returns undef if there are not difference, otherwise difference details.
+Returns undef if there is not difference, otherwise difference details.
 
 =cut
 
@@ -807,7 +808,7 @@ Converts passed in list to string.
 
 sub format_values {
     my ($dataset, @keys) = @_;
-    "[ " . join(" ",  map { $_ . " => '" . ($dataset->{$_} || '')  . "'" } @keys) ." ]";
+    "[ " . join(" ",  map { $_ . " => '" . (defined $dataset->{$_} ? $dataset->{$_} : '')  . "'" } @keys) ." ]";
 }
 
 
@@ -837,7 +838,7 @@ sub retrive_table_data {
     my ($self, $connection, $table_name, $columns) = @_;
     my $counter = 0;
     my $pk_columns = $self->primary_key_definition_cache->{$table_name} ||= [$connection->primary_key_columns($table_name)];
-    my $cursor = $connection->query_cursor(sql => "SELECT " . join(",", @$columns) . " FROM ${table_name}");
+    my $cursor = $connection->query_cursor(sql => "SELECT " . (join(",", @$columns) || '*') . " FROM ${table_name}");
     my $result_set = $cursor->execute();
     my $has_pk = !! @$pk_columns;
     my $result = {};
@@ -896,8 +897,11 @@ sub primary_key_hash_value {
                     my $result = $parent->children_result;
                     push @$parent_result, $element->name => [%$children_result, map { $_ => $attributes->{$_}} sort keys %$attributes];
                 } else {
+                    $element->validate_attributes([], {size_column => undef, file => undef});
                     my $children_result = $parent->children_hash_result;
                     $children_result->{$element->name} = {%$attributes};
+                    my $value = $element->value(1);
+                    $children_result->{content} = $value if $value;
                 }
             });
         }

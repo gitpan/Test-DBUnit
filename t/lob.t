@@ -89,7 +89,7 @@ SKIP: {
 	    ]
         );
 	
-	like($diff, qr{found difference at lob value lob_test.blob_content}, 'should find difference at lob');
+	like($diff, qr{found difference at LOB value lob_test.blob_content}, 'should find difference at lob');
 
         my $errors = $dbunit->expected_dataset(
             emp   => [%emp_1],
@@ -161,7 +161,7 @@ SKIP: {
                 }
             ]
         );
-	like($diff, qr{found difference at lob value lob_test.blob_content}, 'should find difference at lob');
+	like($diff, qr{found difference at LOB value lob_test.blob_content}, 'should find difference at lob');
 
         my $errors = $dbunit->expected_dataset(
             emp   => [%emp_1],

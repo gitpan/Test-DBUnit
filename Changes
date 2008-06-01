@@ -1,5 +1,8 @@
 Revision history for Perl extension Test::DBUnit.
 
+0.07 Say May 31 2008
+    - Fix empty tables issue (explicit deletion)
+
 0.06 Mon May 26 2008
     - Added lob tests feature
     - Fix refresh load strategy.

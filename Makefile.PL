@@ -11,6 +11,8 @@ WriteMakefile(
 	'Simple::SAX::Serializer' => 0,
         'Test::Pod'               => 0,
         'Test::Pod::Coverage'     => 0,
+        'Sub::Uplevel'            => 0,
+        'Test::Builder'           => 0,
     },
     dist         => { COMPRESS => 'gzip', SUFFIX => 'gz' },
     clean        => { FILES => 'MANIFEST.bak' },

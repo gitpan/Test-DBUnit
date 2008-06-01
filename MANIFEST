@@ -4,7 +4,6 @@ examples/dbunit.test1-result.xml
 examples/dbunit.test1.xml
 lib/DBUnit.pm
 lib/Test/DBUnit.pm
-lob.t
 Makefile.PL
 MANIFEST
 META.yml			Module meta-data (added by MakeMaker)
