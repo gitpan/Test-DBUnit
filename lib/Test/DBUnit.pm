@@ -11,7 +11,7 @@ use Carp 'confess';
 use Sub::Uplevel qw(uplevel);
 use Test::Builder;
 
-$VERSION = '0.07';
+$VERSION = '0.08';
 
 @EXPORT = qw(expected_dataset_ok dataset_ok expected_xml_dataset_ok xml_dataset_ok reset_schema_ok populate_schema_ok reset_sequence_ok set_refresh_load_strategy set_insert_load_strategy test_connection test_dbh);
 
@@ -290,9 +290,9 @@ Note that for MySQL reset sequence the test_table_name must be empty.
 For handling very large datasets, the DB vendors provide the LOB (large object) data types.
 You may use this features, and this module allows you test it.
 
-=head3 LOBs tests with an Oracle
+=head3 LOBs tests with Oracle
 
-An Oracle BLOB data type that contains binary data with a maximum size of 4 gigabytes. 
+Oracle BLOB data type that contains binary data with a maximum size of 4 gigabytes. 
 It is advisable to store blob size in separate column to optimize fetch process.(doc_size)
 
     CREATE TABLE image(id NUMBER, name VARCHAR2(100), doc_size NUMBER, blob_content BLOB);
@@ -314,7 +314,7 @@ It is advisable to store blob size in separate column to optimize fetch process.
     );
 
 
-=head3 LOBs tests with an PostgreSQL
+=head3 LOBs tests with PostgreSQL
 
 PostgreSQL has a large object facility, but in this case the tested table doesn't contain LOBs type
 but keeps reference to lob_id, created by lo_creat PostgreSQL function.

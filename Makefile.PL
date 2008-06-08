@@ -1,5 +1,6 @@
 
 use ExtUtils::MakeMaker;
+use 5.006;
 
 WriteMakefile(
     NAME         => 'Test::DBUnit',
