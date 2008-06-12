@@ -67,7 +67,7 @@ This code snippet will validate database binary data with expected content point
 
     $dbunit->expected_dataset(
         emp   => [empno => 1, ename => 'scott', deptno => 10],
-        image  => [id => 1, name => 'Moon'
+        image => [id => 1, name => 'Moon'
             blob_content => {file => 'data/image1.jpg', size_column => 'doc_size'}
         ]
     );
@@ -554,7 +554,6 @@ sub expected_dataset_for_insert_load_strategy {
     my ($self, $exp_dataset, $connection) = @_;
     my $tables = $self->_exp_table_with_column($exp_dataset, $connection);
     my %tables_rows = (map { ($_ => 0) } keys %$tables);
-    
     my $tables_rows = $self->retrive_tables_data($connection, $tables);
     for (my $i = 0; $i < $#{$exp_dataset}; $i += 2) {
         my $table_name = $exp_dataset->[$i];

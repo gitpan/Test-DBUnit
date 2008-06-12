@@ -11,7 +11,7 @@ use Carp 'confess';
 use Sub::Uplevel qw(uplevel);
 use Test::Builder;
 
-$VERSION = '0.08';
+$VERSION = '0.09';
 
 @EXPORT = qw(expected_dataset_ok dataset_ok expected_xml_dataset_ok xml_dataset_ok reset_schema_ok populate_schema_ok reset_sequence_ok set_refresh_load_strategy set_insert_load_strategy test_connection test_dbh);
 
@@ -59,18 +59,18 @@ Test::DBUnit - Database test framework.
     reset_sequence_ok('table1_seq1');
 
     dataset_ok(
-        table1 => [column1 => 'x', column1 => 'y'],
-        table1 => [column1 => 'x1_X', column1 => 'y1_X'],
+        table1 => [column1 => 'x', column2 => 'y'],
+        table1 => [column1 => 'x1_X', column2 => 'y1_X'],
         ...
-        table2 => [column1 => 'x2, column1 => 'y2'],
-        table2 => [column1 => 'x1_N', column1 => 'y1_N'],
+        table2 => [column1 => 'x2, column2 => 'y2'],
+        table2 => [column1 => 'x1_N', column2 => 'y1_N'],
     );
 
     #you database operations here
     $connection->execute_statement("UPDATE ....");
 
     expected_dataset_ok(
-        table1 => [column1 => 'z', column1 => 'y'],
+        table1 => [column1 => 'z', column2 => 'y'],
     )
 
 
@@ -85,7 +85,7 @@ Database tests should giving you complete and fine grained control over the test
     use Test::DBUnit dsn => $dsn, username => $username, password => $password;
     reset_schema_ok('t/sql/create_schema.sql');
     populate_schema_ok('t/sql/create_schema.sql');
-    reset_sequence('emp_seq');
+    reset_sequence_ok('emp_seq');
 
 =head2 Loading test data sets
 
