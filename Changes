@@ -1,5 +1,8 @@
 Revision history for Perl extension Test::DBUnit.
 
+0.10 Tue Aug 19 2008
+    - Extends the database tests for multiple database connections
+
 0.08 Thr Jun 12 2008
     - Improved documentation perl examples.
 

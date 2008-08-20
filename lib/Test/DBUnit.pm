@@ -11,10 +11,9 @@ use Carp 'confess';
 use Sub::Uplevel qw(uplevel);
 use Test::Builder;
 
-$VERSION = '0.09';
+$VERSION = '0.10';
 
-@EXPORT = qw(expected_dataset_ok dataset_ok expected_xml_dataset_ok xml_dataset_ok reset_schema_ok populate_schema_ok reset_sequence_ok set_refresh_load_strategy set_insert_load_strategy test_connection test_dbh);
-
+@EXPORT = qw(expected_dataset_ok dataset_ok expected_xml_dataset_ok xml_dataset_ok reset_schema_ok populate_schema_ok reset_sequence_ok set_refresh_load_strategy set_insert_load_strategy test_connection set_test_connection add_test_connection test_dbh);
 
 =head1 NAME
 
@@ -174,6 +173,38 @@ it can be modified by calling:
 
 The alternative to the insert load strategy is refresh load strategy.
 In this case update on existing rows will take place or insert occurs if rows are missing.
+
+
+head3 Tests with multiple database instances.
+
+You may need to test data from more then one database instance,
+so that you have to specify connection againt which tests will be performed
+either by adding prefix to test methods, or by seting explicit test connection context.
+
+
+    use Test::DBUnit connection_names => ['my_connection_1', 'my_connection_2'];
+    my $dbh = DBI->connect($dsn_1, $username, $password);
+    add_test_connection('my_connection_1', dbh => $dbh);
+
+     my $connection = DBIx::Connection->new(
+        name     => 'my_connection_2',
+        dsn      => $dsn_2,
+        username => $username,
+        password => $password,
+    );
+    add_test_connection($connection);
+
+    #set connection context by prefix
+    my_connection_1_reset_schema_ok('t/sql/create_schema_1.sql');
+    my_connection_1_populate_schema_ok('t/sql/create_schema_1.sql');
+
+    #set connection context explicitly.
+    set_test_connection('my_connection_2');
+    reset_schema_ok('t/sql/create_schema_2.sql');
+    populate_schema_ok('t/sql/create_schema_2.sql');
+
+
+    my_connection_2_set_test_connection('my_connection_2');
 
 
 =head2 Working with sequences
@@ -353,10 +384,12 @@ xml_dataset_ok
 reset_schema_ok
 populate_schema_ok
 reset_sequence_ok
-set_refresh_load_strateg
-set_insert_load_strateg
-connnection
-dbh by default.
+set_refresh_load_strategy
+set_insert_load_strategy
+add_test_connection
+set_test_connection
+test_connection
+test_dbh by default.
 
 =head2 METHODS
 
@@ -370,24 +403,56 @@ dbh by default.
     
 my $Tester = Test::Builder->new;
 my $dbunit;
-
+my $multiple_tests;
     sub import {
         my ($self, %args) = @_;
-        if($args{connection_name}) {
+        if($args{connection_names}) {
+            generate_connection_test_stubs($args{connection_names});
+            $multiple_tests = 1;
+            
+        } elsif($args{connection_name}) {
             $dbunit = DBUnit->new(%args);
-        } else {
+            
+        } elsif(scalar(%args)) {
             eval {
-            _initialise_connection(%args);
-            $dbunit = DBUnit->new(connection_name => 'test');
+                $dbunit = DBUnit->new(connection_name => 'test');
+                _initialise_connection(%args);
             };
             if ($@) {
                 my ($msg) = ($@ =~ /([^\n]+)/);
                 $Tester->plan( skip_all => $msg);
             }
-        }
+        } 
+       $dbunit ||= DBUnit->new(connection_name => 'test');
        $self->export_to_level( 1, $self, $_ ) foreach @EXPORT;
     }
 
+
+=item generate_connection_test_stubs
+
+Generated test stubs on fly for passed in connection names.
+
+=cut
+
+sub generate_connection_test_stubs {
+    my ($connections) = @_;
+    for my $connection (@$connections) {
+        for my $exp (@EXPORT[0 ..9]) {
+            my $method_name = "${connection}_$exp";
+            Abstract::Meta::Class::add_method(__PACKAGE__,
+                $method_name, sub {
+                    my $ory_connection_name = $dbunit->connection_name;
+                    set_test_connection($connection);
+                    my $method = __PACKAGE__->can($exp);
+                    $method->(@_);
+                    set_test_connection($ory_connection_name);
+                }
+            );
+            push @EXPORT, $method_name;
+        }
+    }
+    
+}
 
 =item reset_schema_ok
 
@@ -404,7 +469,7 @@ Tests database schema reset using sql file. Takes file name as parameter.
 
     sub reset_schema_ok {
         my ($file_name) = @_;
-        my $description = "should reset schema (${file_name})";
+        my $description = "should reset schema" . test_connection_context() . " (${file_name})";
         my $ok;
         eval {
             $dbunit->reset_schema($file_name);
@@ -433,7 +498,7 @@ Tests database schema population using sql file. Takes file name as parameter.
 
     sub populate_schema_ok {
         my ($file_name) = @_;
-        my $description = "should populate schema (${file_name})";
+        my $description = "should populate schema". test_connection_context() ." (${file_name})";
         my $ok;
         eval {
             $dbunit->populate_schema($file_name);
@@ -453,7 +518,6 @@ Resets database sequence. Takes sequence name as parameter.
     use Test::More tests => $tests; 
     use Test::DBUnit dsn => $dsn, username => $username, password => $password;
 
-    ...
 
     reset_sequnce('table_seq1');
 
@@ -461,7 +525,7 @@ Resets database sequence. Takes sequence name as parameter.
 
     sub reset_sequence_ok {
         my ($sequence_name) = @_;
-        my $description = "should reset sequence ${sequence_name}";
+        my $description = "should reset sequence" . test_connection_context() . " ${sequence_name}";
         my $ok;
         eval {
             $dbunit->reset_sequence($sequence_name);
@@ -499,7 +563,7 @@ expect t/sub_dir/001_test.test1.xml file.
         my $xm_file = ($unit_name =~ /.xml$/i)
             ? $unit_name
             : _xml_test_file($unit_name) . ".xml";
-        my $description = "should load dataset (${xm_file})";
+        my $description = "should load dataset" . test_connection_context() . " (${xm_file})";
         my $ok;
         eval {
             $dbunit->xml_dataset($xm_file);
@@ -536,7 +600,7 @@ expect t/sub_dir/001_test.test1.xml file.
         my $xm_file = ($unit_name =~ /.xml$/i)
             ? $unit_name
             : _xml_test_file($unit_name) . "-result.xml";
-        my $description = "should validate expected dataset (${xm_file})";
+        my $description = "should validate expected dataset" . test_connection_context() . "(${xm_file})";
         my $validation;
         my $ok;
         eval {
@@ -566,7 +630,7 @@ Tests database schema population/synch to the passed in dataset.
 
     sub dataset_ok {
         my (@dataset) = @_;
-        my $description = "should load dataset";
+        my $description = "should load dataset" . test_connection_context();
         my $ok;
         eval {
             $dbunit->dataset(@dataset);
@@ -591,7 +655,7 @@ Validates database schema against passed in dataset.
 
     sub expected_dataset_ok {
         my (@dataset) = @_;
-        my $description = "should validate expected dataset";
+        my $description = "should validate expected dataset" . test_connection_context();
         my $validation;
         my $ok;
         eval {
@@ -606,11 +670,28 @@ Validates database schema against passed in dataset.
     }
 
 
+=item _initialise_connection
+
+Initialises default test connection
+
+=cut
+
     my $connection;
     sub _initialise_connection {
-        $connection = DBIx::Connection->new(name => 'test', @_);
+        add_test_connection('test', @_);
     }
 
+
+=item test_connection_context
+
+Returns tested connection name,
+
+=cut
+
+sub test_connection_context {
+    return '' unless $multiple_tests;
+    "[" .$dbunit->connection_name . "]";
+}
 
 =item test_connection
 
@@ -619,9 +700,59 @@ Returns test connection object.
 =cut
 
     sub test_connection {
-        $connection  ||= DBIx::Connection->connection($dbunit->connection_name);
+        $connection = DBIx::Connection->connection($dbunit->connection_name);
     }
     
+
+=item add_test_connection
+
+Adds tests connection
+
+
+    use Test::DBUnit;
+
+    # or
+
+    use Test::DBUnit connection_names => ['my_connection_name', 'my_connection_name1'];
+
+    my $connection = DBIx::Connection->new(...);
+    add_test_connection($connection);
+
+    #or
+
+    add_test_connection('my_connection_name', dsn =>  $dsn, username => $username, password => 'password');
+
+    #or
+
+    add_test_connection('my_connection_name', dbh => $dbh);
+
+
+=cut
+
+    sub add_test_connection {
+        my ($connection_, @args) = @_;
+        if(ref($connection_)) {
+            $connection = $connection_;
+            $connection_ = $connection->name;
+        }
+        set_test_connection($connection_);
+        if(@args) {
+            $connection = DBIx::Connection->new(name => $connection_, @args);
+        }
+        
+    }
+
+=item set_test_connection
+
+Sets test connection that will be tested.
+
+=cut
+
+    sub set_test_connection {
+        my ($connection_name) = @_;
+        $dbunit->set_connection_name($connection_name);
+    }
+
 
 =item test_dbh
 
@@ -633,7 +764,7 @@ Returns test database handler.
         test_connection()->dbh;
     }
     
-    
+
 =item set_insert_load_strategy
 
 Sets insert as the load strategy
@@ -671,7 +802,10 @@ sub _xml_test_file {
     $test_file;
 }
 
+
+
 1;
+
 __END__
 
 =back

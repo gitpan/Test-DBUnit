@@ -28,4 +28,7 @@ t/test/dbunit.test1.xml
 t/test/lob.t
 t/test/lob.test1-result.xml
 t/test/lob.test1.xml
+t/test/multi.t
+t/test/multi.test1-result.xml
+t/test/multi.test1.xml
 t/test/skip.t
