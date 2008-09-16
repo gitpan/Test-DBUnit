@@ -1,5 +1,8 @@
 Revision history for Perl extension Test::DBUnit.
 
+0.11 Tuw Sep 16 2007
+    - All xxx_ok methods now return true if test's result is possitive
+
 0.10 Tue Aug 19 2008
     - Extends the database tests for multiple database connections
 

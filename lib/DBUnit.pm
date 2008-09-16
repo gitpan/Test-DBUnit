@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use vars qw(@EXPORT_OK %EXPORT_TAGS $VERSION);
 
-$VERSION = '0.07';
+$VERSION = '0.08';
 
 use Abstract::Meta::Class ':all';
 use base 'Exporter';
@@ -948,7 +948,7 @@ sub _load_file_content {
     local $/ = undef;
     my $content = <$fh>;
     close $fh;
-    $content ;
+    $content;
 }
 
 1;

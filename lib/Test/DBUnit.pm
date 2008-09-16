@@ -11,7 +11,7 @@ use Carp 'confess';
 use Sub::Uplevel qw(uplevel);
 use Test::Builder;
 
-$VERSION = '0.10';
+$VERSION = '0.11';
 
 @EXPORT = qw(expected_dataset_ok dataset_ok expected_xml_dataset_ok xml_dataset_ok reset_schema_ok populate_schema_ok reset_sequence_ok set_refresh_load_strategy set_insert_load_strategy test_connection set_test_connection add_test_connection test_dbh);
 
@@ -174,8 +174,7 @@ it can be modified by calling:
 The alternative to the insert load strategy is refresh load strategy.
 In this case update on existing rows will take place or insert occurs if rows are missing.
 
-
-head3 Tests with multiple database instances.
+=head3 Tests with multiple database instances.
 
 You may need to test data from more then one database instance,
 so that you have to specify connection againt which tests will be performed
@@ -184,8 +183,9 @@ either by adding prefix to test methods, or by seting explicit test connection c
 
     use Test::DBUnit connection_names => ['my_connection_1', 'my_connection_2'];
     my $dbh = DBI->connect($dsn_1, $username, $password);
+    
     add_test_connection('my_connection_1', dbh => $dbh);
-
+    # or
      my $connection = DBIx::Connection->new(
         name     => 'my_connection_2',
         dsn      => $dsn_2,
@@ -194,17 +194,23 @@ either by adding prefix to test methods, or by seting explicit test connection c
     );
     add_test_connection($connection);
 
+
     #set connection context by prefix
     my_connection_1_reset_schema_ok('t/sql/create_schema_1.sql');
     my_connection_1_populate_schema_ok('t/sql/create_schema_1.sql');
+
+    my_connection_2_xml_dataset_ok('test1');
+    ...
+    my_connection_2_expected_xml_dataset_ok('test1');
+
 
     #set connection context explicitly.
     set_test_connection('my_connection_2');
     reset_schema_ok('t/sql/create_schema_2.sql');
     populate_schema_ok('t/sql/create_schema_2.sql');
-
-
-    my_connection_2_set_test_connection('my_connection_2');
+    xml_dataset_ok('test1');
+    ...
+    expected_xml_dataset_ok('test1');
 
 
 =head2 Working with sequences
@@ -389,7 +395,9 @@ set_insert_load_strategy
 add_test_connection
 set_test_connection
 test_connection
-test_dbh by default.
+test_dbh
+<connection_name>_(expected_data_set_ok | dataset_ok | expected_xml_dataset_ok | xml_dataset_ok | reset_schema_ok | populate_schema_ok | reset_sequence_ok | set_refresh_load_strategy | set_insert_load_strategy)
+by default.
 
 =head2 METHODS
 
@@ -477,8 +485,9 @@ Tests database schema reset using sql file. Takes file name as parameter.
         };
         my $explanation = "";
         $explanation .= "\n" . $@ if $@;
-        $Tester->ok( $ok, $description );
+        $Tester->ok($ok, $description );
         $Tester->diag($explanation) unless $ok;
+        $ok;
     }
 
 
@@ -508,6 +517,7 @@ Tests database schema population using sql file. Takes file name as parameter.
         $explanation .= "\n" . $@ if $@;
         $Tester->ok( $ok, $description );
         $Tester->diag($explanation) unless $ok;
+        $ok;
     }
 
 
@@ -535,6 +545,7 @@ Resets database sequence. Takes sequence name as parameter.
         $explanation .= "\n" . $@ if $@;
         $Tester->ok( $ok, $description );
         $Tester->diag($explanation) unless $ok;
+        $ok;
     }
 
 
@@ -573,6 +584,7 @@ expect t/sub_dir/001_test.test1.xml file.
         $explanation .= "\n" . $@ if $@;
         $Tester->ok( $ok, $description );
         $Tester->diag($explanation) unless $ok;
+        $ok;
     }
 
 
@@ -612,6 +624,7 @@ expect t/sub_dir/001_test.test1.xml file.
         $explanation .= "\n" . $@ if $@;
         $Tester->ok( $ok, $description );
         $Tester->diag($explanation) unless $ok;
+        $ok;
     }
 
 
@@ -640,6 +653,7 @@ Tests database schema population/synch to the passed in dataset.
         $explanation .= "\n" . $@ if $@;
         $Tester->ok( $ok, $description );
         $Tester->diag($explanation) unless $ok;
+        $ok;
     }
 
 
@@ -667,6 +681,7 @@ Validates database schema against passed in dataset.
         $explanation .= "\n" . $@ if $@;
         $Tester->ok( $ok, $description );
         $Tester->diag($explanation) unless $ok;
+        $ok;
     }
 
 
