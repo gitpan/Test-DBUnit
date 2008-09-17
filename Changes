@@ -1,6 +1,9 @@
 Revision history for Perl extension Test::DBUnit.
 
-0.11 Tuw Sep 16 2007
+0.12 Wen Sep 17 2007
+    - Added dynamic tests callbacks
+
+0.11 Tue Sep 16 2007
     - All xxx_ok methods now return true if test's result is possitive
 
 0.10 Tue Aug 19 2008

@@ -11,7 +11,7 @@ use Carp 'confess';
 use Sub::Uplevel qw(uplevel);
 use Test::Builder;
 
-$VERSION = '0.11';
+$VERSION = '0.12';
 
 @EXPORT = qw(expected_dataset_ok dataset_ok expected_xml_dataset_ok xml_dataset_ok reset_schema_ok populate_schema_ok reset_sequence_ok set_refresh_load_strategy set_insert_load_strategy test_connection set_test_connection add_test_connection test_dbh);
 
@@ -123,7 +123,7 @@ You may want to check the result of a update/insert/delete method or a stored pr
         emp   => [empno => "2", ename => "John",  deptno => "10", job => "engineer"],
         emp   => [empno => "3", ename => "Mark",  deptno => "10", job => "sales assistant"],
         bonus => [ename => "scott", job => "project manager", sal => "20"],
-    )
+    );
     or
 
     expected_xml_dataset_ok('test1');
@@ -136,6 +136,26 @@ You may want to check the result of a update/insert/delete method or a stored pr
         <emp empno="3" ename="Mark"  deptno="10" job="sales assistant" />
         <bonus ename="scott" job="project manager" sal="20" />
     </dataset>
+
+
+=head3 dynamic_tests
+
+You may want to check not just a particular value but range of values or perform complex condition checking against
+database column's value, so then you can use callback. It takes database column's value as parameter and should return
+true to pass the test, false otherwise.
+
+    expected_dataset_ok(
+        emp   => [empno => "1", ename => "Scott", deptno => "10", job => "project manager"],
+        emp   => [empno => "2", ename => "John",  deptno => "10", job => "engineer"],
+        emp   => [empno => "3", ename => "Mark",  deptno => "10",
+            job => sub {
+                my $value = shift;
+                !! ($value =~ /sales assistant/i);
+            }
+        ],
+        bonus => [ename => "scott", job => "project manager", sal => "20"],
+    );
+
 
 =head2 Configuring the dataset load strategy
 
@@ -209,7 +229,7 @@ either by adding prefix to test methods, or by seting explicit test connection c
     reset_schema_ok('t/sql/create_schema_2.sql');
     populate_schema_ok('t/sql/create_schema_2.sql');
     xml_dataset_ok('test1');
-    ...
+
     expected_xml_dataset_ok('test1');
 
 

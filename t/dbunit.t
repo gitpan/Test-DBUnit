@@ -1,7 +1,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 37;
+use Test::More tests => 41;
 
 my $class;
 
@@ -113,7 +113,7 @@ VALUES(20, \'IT\', \'Katowice;\')',
 
 SKIP: {
     
-    skip('missing env varaibles DB_TEST_CONNECTION, DB_TEST_USERNAME DB_TEST_PASSWORD', 27)
+    skip('missing env varaibles DB_TEST_CONNECTION, DB_TEST_USERNAME DB_TEST_PASSWORD', 29)
 
       unless $ENV{DB_TEST_CONNECTION};
     use DBIx::Connection;
@@ -194,6 +194,32 @@ SKIP: {
             bonus => [ename => 'scott', sal => 10.4],
         ), 'should have expected data');
 
+
+        ok(! $dbunit->expected_dataset(
+            emp   => [%emp_1],
+            emp   => [%emp_2, ename => sub {
+			  my $val = shift;
+			  !! ($val eq 'John');
+			}
+	        ],
+            emp   => [%emp_20],
+            bonus => [%bonus],
+            bonus => [ename => 'scott', sal => 10.4],
+        ), 'should have expected data - code ref');
+
+
+        ok($dbunit->expected_dataset(
+            emp   => [%emp_1],
+            emp   => [%emp_2, ename => sub {
+			  my $val = shift;
+			  !! ($val eq 'John1');
+			}
+	        ],
+            emp   => [%emp_20],
+            bonus => [%bonus],
+            bonus => [ename => 'scott', sal => 10.4],
+        ), 'should not have expected data - code ref');
+
         
         $connection->do("INSERT INTO bonus (ename, sal) VALUES('scott', 10.4)");
         my $result = $dbunit->expected_dataset(
@@ -262,6 +288,27 @@ SKIP: {
             emp   => [%emp_2, ename => 'John'],
             bonus => [%bonus],
         ), 'have expected data');
+
+
+	ok(! $dbunit->expected_dataset(
+            emp   => [%emp_1],
+            emp   => [%emp_2, ename => sub {
+		my $val = shift;
+		!! ($val eq 'John');
+		}],
+            bonus => [%bonus],
+        ), 'have expected data code ref');
+
+
+	ok($dbunit->expected_dataset(
+            emp   => [%emp_1],
+            emp   => [%emp_2, ename => sub {
+		my $val = shift;
+		!! ($val eq 'John1');
+		}],
+            bonus => [%bonus],
+        ), 'have not have expected data code ref');
+
         
         {
             my $result = $dbunit->expected_dataset(

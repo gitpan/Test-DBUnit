@@ -1,4 +1,4 @@
-Test/DBunit version 0.11
+Test/DBunit version 0.12
 ===========================
     Simple database test interface.
 
@@ -19,6 +19,7 @@ This module requires these other modules and libraries:
   Abstract::Meta::Class 
   DBIx::Connection
   Simple::SAX::Serializer
+  XML::SAX
   Test::Pod
   Test::Pod::Coverage
 

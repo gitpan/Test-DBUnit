@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use vars qw(@EXPORT_OK %EXPORT_TAGS $VERSION);
 
-$VERSION = '0.08';
+$VERSION = '0.09';
 
 use Abstract::Meta::Class ':all';
 use base 'Exporter';
@@ -623,7 +623,7 @@ sub _exp_table_with_column {
 sub _extract_column_values {
     my ($self, $dataset) = @_;
     my %values = @$dataset;
-    my $result = {map {(! ref($values{$_}) ? ($_ => $values{$_}) : ())} keys %values};
+    my $result = {map {(!(ref($values{$_}) eq 'HASH') ? ($_ => $values{$_}) : ())} keys %values};
     wantarray ? (%$result) : $result;
 }
 
@@ -635,7 +635,7 @@ sub _extract_column_values {
 sub _extract_lob_values {
     my ($self, $dataset) = @_;
     my %values = @$dataset;
-    my $result = {map {(ref($values{$_}) ? ($_ => $values{$_}) : ())} keys %values};
+    my $result = {map {(ref($values{$_}) eq 'HASH'  ? ($_ => $values{$_}) : ())} keys %values};
     $self->_process_lob($result);
     wantarray ? (%$result) : $result;
 }
@@ -764,7 +764,7 @@ Return undef if there is not difference otherwise returns validation error.
 
 sub validate_expexted_dataset {
     my ($self, $exp_dataset, $pk_columns, $table_name, $connection, $lob_values) = @_;
-    my @condition_columns = (@$pk_columns ? @$pk_columns : keys %$exp_dataset);
+    my @condition_columns = (@$pk_columns ? @$pk_columns : map { (!ref($exp_dataset->{$_}) ? ($_) : ()) }  keys %$exp_dataset);
     if ($lob_values && %$lob_values) {
         my $result = $self->validate_lobs($lob_values, $table_name, \@condition_columns, $exp_dataset, $connection);
         return $result if $result;
@@ -791,6 +791,13 @@ Returns undef if there is not difference, otherwise difference details.
 sub compare_datasets {
     my ($dataset, $exp_dataset, $table_name, @keys) = @_;
     for my $k (@keys) {
+  	    if (ref $exp_dataset->{$k}) {
+    	    my $result = $exp_dataset->{$k}->($dataset->{$k});
+	        return "found difference in $table_name $k:"
+  		    . "\n  " . format_values($dataset, @keys)
+      		unless $result;
+	        next;
+  		}
         return "found difference in $table_name $k:"
         . "\n  " . format_values($exp_dataset, @keys)
         . "\n  " . format_values($dataset, @keys)
