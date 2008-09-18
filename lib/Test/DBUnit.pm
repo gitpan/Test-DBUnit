@@ -11,7 +11,7 @@ use Carp 'confess';
 use Sub::Uplevel qw(uplevel);
 use Test::Builder;
 
-$VERSION = '0.12';
+$VERSION = '0.13';
 
 @EXPORT = qw(expected_dataset_ok dataset_ok expected_xml_dataset_ok xml_dataset_ok reset_schema_ok populate_schema_ok reset_sequence_ok set_refresh_load_strategy set_insert_load_strategy test_connection set_test_connection add_test_connection test_dbh);
 
@@ -138,7 +138,7 @@ You may want to check the result of a update/insert/delete method or a stored pr
     </dataset>
 
 
-=head3 dynamic_tests
+=head3 Dynamic tests
 
 You may want to check not just a particular value but range of values or perform complex condition checking against
 database column's value, so then you can use callback. It takes database column's value as parameter and should return
@@ -155,6 +155,20 @@ true to pass the test, false otherwise.
         ],
         bonus => [ename => "scott", job => "project manager", sal => "20"],
     );
+
+    or
+
+    <?xml version='1.0' encoding='UTF-8'?>
+    <dataset >
+        <emp empno="1" ename="Scott" deptno="10" job="project manager" />
+        <emp empno="2" ename="John"  deptno="10" job="engineer" />
+        <emp empno="3" ename="Mark"  deptno="10" >
+            <job><![CDATA[
+                my $val = shift;
+                !! ($val eq "sales assistant");
+            ]]><job>
+        <bonus ename="scott" job="project manager" sal="20" />
+    </dataset>
 
 
 =head2 Configuring the dataset load strategy
@@ -185,10 +199,10 @@ it can be modified by calling:
 
     set_refresh_load_strategy();
     or in XML
+
     <?xml version='1.0' encoding='UTF-8'?>
     <dataset load_strategy="REFRESH_LOAD_STRATEGY">
         <emp empno="1" ename="Scott" deptno="10" job="project manager" />
-        ....
     </dataset>
 
 The alternative to the insert load strategy is refresh load strategy.

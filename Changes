@@ -1,5 +1,10 @@
 Revision history for Perl extension Test::DBUnit.
 
+0.13 Thu Sep 18 2008
+    - Added dybanic test for xml
+    - Fix tests
+    - Fix META.yml
+
 0.12 Wen Sep 17 2007
     - Added dynamic tests callbacks
 

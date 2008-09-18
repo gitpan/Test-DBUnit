@@ -903,11 +903,17 @@ sub primary_key_hash_value {
                     my $result = $parent->children_result;
                     push @$parent_result, $element->name => [%$children_result, map { $_ => $attributes->{$_}} sort keys %$attributes];
                 } else {
-                    $element->validate_attributes([], {size_column => undef, file => undef});
+                    # hacky
                     my $children_result = $parent->children_hash_result;
-                    $children_result->{$element->name} = {%$attributes};
                     my $value = $element->value(1);
-                    $children_result->{content} = $value if $value;
+		   unless(scalar %$attributes) {
+                        $children_result->{$element->name} = eval "sub { $value }";
+                   } else {
+                        $element->validate_attributes([], {size_column => undef, file => undef});
+                        my $children_result = $parent->children_hash_result;
+                        $children_result->{$element->name} = {%$attributes};
+                        $children_result->{content} = $value if $value;
+                   }
                 }
             });
         }
