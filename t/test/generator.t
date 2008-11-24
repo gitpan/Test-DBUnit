@@ -1,0 +1,62 @@
+use strict;
+use warnings;
+
+use DBIx::Connection;
+use Test::More tests => 3;
+
+my $class;
+
+
+BEGIN {
+    $class = 'Test::DBUnit::Generator';
+    use_ok($class);
+}
+
+sub dataset_ok {
+    my @args = @_;
+    return @args;
+}
+
+
+SKIP: {
+    skip('missing env varaibles DB_TEST_CONNECTION, DB_TEST_USERNAME DB_TEST_PASSWORD', 10)
+        unless $ENV{DB_TEST_CONNECTION};
+     my $connection = DBIx::Connection->new(
+        name     => 'test',
+        dsn      => $ENV{DB_TEST_CONNECTION},
+        username => $ENV{DB_TEST_USERNAME},
+        password => $ENV{DB_TEST_PASSWORD},
+    );
+
+
+    my $gen = $class->new(
+       connection => $connection,
+       datasets => {
+            tag1 => q{
+                SELECT 1 AS col1, 2 AS col2
+                UNION
+                SELECT 'b' AS col1, 3 AS col2
+            },
+            tag2 => q{
+                SELECT 'a' AS col1, 'b' AS col2
+                UNION
+                SELECT 'b' AS col1, 'abc<>ew' AS col2
+                
+            }
+       }
+        
+    );
+
+    like($gen->xml, qr{col1="1"}, "should generate xml dataset");
+    my $perl = $gen->perl;
+    my @data;
+    @data = eval("&${perl}");
+    is_deeply(\@data, 
+    [tag1 => ['col1','1','col2','2'],
+    tag1 => ['col1','b','col2','3'],
+    tag2 => ['col1','a','col2','b'],
+    tag2 => ['col1','b','col2','abc<>ew']] ,'should generate perl dataset');
+
+}
+
+

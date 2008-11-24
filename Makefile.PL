@@ -6,11 +6,14 @@ WriteMakefile(
     NAME         => 'Test::DBUnit',
     VERSION_FROM => 'lib/Test/DBUnit.pm',
     DISTNAME     => 'Test-DBUnit',
-    PREREQ_PM    => { 
+    PREREQ_PM    => {
         'Abstract::Meta::Class'   => 0,
-	'DBIx::Connection'        => 0.08,
+	'DBIx::Connection'        => 0.09,
 	'XML::SAX'		  => 0,
-	'Simple::SAX::Serializer' => 0,
+	'Simple::SAX::Serializer' => 0.05,
+	'IO::File'		  => 0,
+        'XML::Writer'		  => 0,
+        'Data::Dumper'		  => 0,
         'Test::Pod'               => 0,
         'Test::Pod::Coverage'     => 0,
         'Sub::Uplevel'            => 0,

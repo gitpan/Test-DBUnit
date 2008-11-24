@@ -11,7 +11,7 @@ use Carp 'confess';
 use Sub::Uplevel qw(uplevel);
 use Test::Builder;
 
-$VERSION = '0.13';
+$VERSION = '0.14';
 
 @EXPORT = qw(expected_dataset_ok dataset_ok expected_xml_dataset_ok xml_dataset_ok reset_schema_ok populate_schema_ok reset_sequence_ok set_refresh_load_strategy set_insert_load_strategy test_connection set_test_connection add_test_connection test_dbh);
 
@@ -868,6 +868,7 @@ the Perl README file.
 =head1 SEE ALSO
 
 L<DBUnit>
+L<Test::DBUnit::Generator>
 L<DBIx::Connection>
 
 =head1 AUTHOR
