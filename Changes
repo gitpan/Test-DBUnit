@@ -1,5 +1,8 @@
 Revision history for Perl extension Test::DBUnit.
 
+0.15 Mon Nov 24 2008
+    - Fix generator tests
+
 0.14 Sun Nov 22 2008
     - Added dataset generator class
 

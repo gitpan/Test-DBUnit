@@ -10,12 +10,12 @@ use IO::File;
 
 use vars qw($VERSION);
 
-$VERSION = '0.1';
+$VERSION = '0.2';
 
 
 =head1 NAME
 
-Test::DBUnit::Genertor - dbunit dataset generator
+Test::DBUnit::Generator - dbunit dataset generator
 
 =head1 SYNOPSIS
 
@@ -91,7 +91,8 @@ sub xml {
     }
     $writer->endTag("dataset");
     $writer->end();
-    $output =~ s/([\n\r])\/>/\/$1/g;
+    $output =~ s/[\n\r](\s*\/>)/$1\n/g;
+    $output =~ s/[\n\r](\s*>)/$1\n/g;
     $output;
 }
 

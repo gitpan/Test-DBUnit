@@ -19,7 +19,7 @@ sub dataset_ok {
 
 
 SKIP: {
-    skip('missing env varaibles DB_TEST_CONNECTION, DB_TEST_USERNAME DB_TEST_PASSWORD', 10)
+    skip('missing env varaibles DB_TEST_CONNECTION, DB_TEST_USERNAME DB_TEST_PASSWORD', 2)
         unless $ENV{DB_TEST_CONNECTION};
      my $connection = DBIx::Connection->new(
         name     => 'test',
@@ -28,22 +28,36 @@ SKIP: {
         password => $ENV{DB_TEST_PASSWORD},
     );
 
-
+    my %dataset = lc ($connection->dbms_name) eq  'oracle'
+    ? (
+    tag1 => q{
+        SELECT '1' AS col1, '2' AS col2 FROM DUAL
+        UNION
+        SELECT 'b' AS col1, '3' AS col2 FROM DUAL
+    },
+    tag2 => q{
+        SELECT 'a' AS col1, 'b' AS col2 FROM DUAL
+        UNION
+        SELECT 'b' AS col1, 'abc<>ew' AS col2 FROM DUAL
+        
+    }
+    ) : (
+    tag1 => q{
+        SELECT '1' AS col1, '2' AS col2
+        UNION
+        SELECT 'b' AS col1, '3' AS col2
+    },
+    tag2 => q{
+        SELECT 'a' AS col1, 'b' AS col2
+        UNION
+        SELECT 'b' AS col1, 'abc<>ew' AS col2
+        
+    }
+    );
+   
     my $gen = $class->new(
        connection => $connection,
-       datasets => {
-            tag1 => q{
-                SELECT 1 AS col1, 2 AS col2
-                UNION
-                SELECT 'b' AS col1, 3 AS col2
-            },
-            tag2 => q{
-                SELECT 'a' AS col1, 'b' AS col2
-                UNION
-                SELECT 'b' AS col1, 'abc<>ew' AS col2
-                
-            }
-       }
+       datasets => {%dataset}
         
     );
 
