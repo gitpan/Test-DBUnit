@@ -8,7 +8,7 @@ WriteMakefile(
     DISTNAME     => 'Test-DBUnit',
     PREREQ_PM    => {
         'Abstract::Meta::Class'   => 0,
-	'DBIx::Connection'        => 0.10,
+	'DBIx::Connection'        => 0.12,
 	'XML::SAX'		  => 0,
 	'Simple::SAX::Serializer' => 0.05,
 	'IO::File'		  => 0,

@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use vars qw(@EXPORT_OK %EXPORT_TAGS $VERSION);
 
-$VERSION = '0.09';
+$VERSION = '0.10';
 
 use Abstract::Meta::Class ':all';
 use base 'Exporter';
@@ -144,6 +144,8 @@ has '%.primary_key_definition_cache';
 
 Resets schema
 
+    $dbunit->reset_schema;
+
 =cut
 
 
@@ -236,6 +238,8 @@ sub expected_dataset {
 
 Resets passed in sequence
 
+    $dbunit->reset_sequence('emp_seq');
+    
 =cut
 
 sub reset_sequence {
@@ -246,9 +250,838 @@ sub reset_sequence {
 }
 
 
+=item throws
+
+Returns errorcode, error message for the specified sql or plsql code.
+
+    my ($error_code, $error_message) = $dbunit->throws(
+        "INSERT INTO emp(empno, ename) VALUES (NULL, 'Smith')"
+    );
+
+=cut
+
+
+sub throws {
+    my ($self, $pl_sql) = @_;
+    my $connection = DBIx::Connection->connection($self->connection_name);
+    my $dbms = lc $connection->dbms_name;
+    $pl_sql .= ';' unless ($pl_sql =~ /;$/);
+    my ($error_code, $error_message);
+    if ($dbms eq 'oracle' && !($pl_sql =~ /begin/i)) {
+        $pl_sql = sprintf("BEGIN\n%sEND;", $pl_sql);
+    } 
+    my $dbh = $connection->dbh;
+    my $sth = $connection->plsql_handler(plsql => $pl_sql);
+    eval { $sth->execute(); };
+    $error_code = $dbh->err;
+    $error_message = $dbh->errstr;
+    $connection->close();
+    return ($error_code, $error_message);
+}
+
+
+=item execute
+
+Returns hash reference where keys are the bind variables
+
+    my $plsql = "SELECT NOW() INTO :var";
+    my $result = $dbunit->execute($plsql);
+    my $result = $dbunit->execute($plsql, $bind_variables_definition);
+
+See L<DBIx::Connection> for more detail
+
+=cut
+
+sub execute {
+    my ($self, $pl_sql, $bind_variables_definition) = @_;
+    my $connection = DBIx::Connection->connection($self->connection_name);
+    $pl_sql .= ';' unless ($pl_sql =~ /;$/);
+    my $sth = $connection->plsql_handler(
+        plsql          => sprintf("BEGIN\n%sEND;",$pl_sql),
+        ($bind_variables_definition ? (bind_variables => $bind_variables_definition) :())
+    );
+    my $result = $sth->execute();
+    $connection->close();
+    $result;
+}
+
+
+=back
+
+=head2 SCHEMA TEST METHODS
+
+    The following methods check for existence.of the particualr database
+    schema objects like table, column, index, triggers,
+    function, procedures packages.
+
+=over
+
+=item has_table
+
+Returns true if the specified table exists.
+
+    $dbunit->has_table($schema, $table);
+    $dbunit->has_table($table);
+
+=cut
+
+sub has_table {
+    my ($self, @args) = @_;
+    my ($table, $schema) = (@args == 1) ? $args[0] : reverse @args;
+    my $connection = DBIx::Connection->connection($self->connection_name);
+    my $result = $connection->has_table($table, $schema);
+    $connection->close();
+    return $result;
+}
+
+
+=item has_view
+
+Returns true if the specified view exists.
+
+    $dbunit->has_view($schema, $view);
+    $dbunit->hasnt_table($view);
+
+=cut
+
+sub has_view {
+    my ($self, @args) = @_;
+    my ($view, $schema) = (@args == 1) ? $args[0] : reverse @args;
+    my $connection = DBIx::Connection->connection($self->connection_name);
+    my $result = $connection->has_view($view, $schema);
+    $connection->close();
+    return $result;
+}
+
+
+=item has_column
+
+Returns true if the specified column for given table exists.
+
+    $dbunit->has_column($schema, $table, $columm);
+    $dbunit->has_column($table, $columm);
+
+=cut
+
+sub has_column {
+    my ($self, @args) = @_;
+    my ($table, $column, $schema) = (@args == 2) ? @args : @args[1,2,0];
+    my $connection = DBIx::Connection->connection($self->connection_name);
+    my $result = !! $connection->column($table, lc $column, $schema);
+    $connection->close();
+    return $result;
+}
+
+
+=item has_columns
+
+Returns true if all specified columns exist for given table otherwise undef.
+Check additionally failed_test_info method.
+
+    my $columms = ['id', 'name']
+    $dbunit->has_columns($schema, $table, $columms);
+    $dbunit->has_column($table, $columms);
+
+=cut
+
+sub has_columns {
+    my ($self, @args) = @_;
+    my ($table, $columns, $schema) = (@args == 2) ? @args : @args[1,2,0];
+    confess 'columns must be an array ref type'
+        unless ref($columns) eq 'ARRAY';
+    my $connection = DBIx::Connection->connection($self->connection_name);
+    my $db_columns = $connection->columns($table, $schema) || [];
+    my @db_columns = map {lc($_->{name})} @$db_columns;
+    $connection->close();
+    
+    my @missing = map { my $column = $_;
+        (! (grep { lc($_) eq $column} @$columns) ? ($column) : ())
+    } @db_columns;
+    
+    my @additional = map { my $column = lc($_);
+        (! (grep { $_ eq $column} @db_columns) ? ($column) : ())
+    } @$columns;
+    
+    my $result;
+    $self->_set_failed_test_info('');
+    if(@missing || @additional) {
+        my $plural_missing = @missing > 1;
+        $self->_set_failed_test_info(
+            sprintf("got %s colunms: %s\nexpected: %s (-%s +%s)",
+                $table,
+                join (", ", @db_columns),
+                join (", ", @$columns),
+                join (", ", @missing),
+                join (", ", @additional),
+            )
+        );
+        $result = undef;
+    } else {
+        $result = 1;
+    }
+    return $result;
+}
+
+
+=item column_is_null
+
+Returns true if the specified column for given table can be nullable.
+
+    $dbunit->column_is_null($schema, $table, $columm);
+    $dbunit->column_is_null($table, $columm);
+
+=cut
+
+sub column_is_null {
+    my ($self, @args) = @_;
+    my ($table, $column, $schema) = (@args == 2) ? @args : @args[1,2,0];
+    my $connection = DBIx::Connection->connection($self->connection_name);
+    my $column_def = $connection->column($table, lc ($column), $schema);
+    $connection->close();
+    return undef unless $column_def;
+    return exists ($column_def->{nullable}) ? $column_def->{nullable} : undef;
+}
+
+
+=item column_is_not_null
+
+Returns true if the specified column for given table cant be nullable.
+
+    $dbunit->column_is_not_null($schema, $table, $columm);
+    $dbunit->column_is_not_null($table, $columm);
+
+=cut
+
+sub column_is_not_null {
+    my ($self, @args) = @_;
+    my ($table, $column, $schema) = (@args == 2) ? @args : @args[1,2,0];
+    my $connection = DBIx::Connection->connection($self->connection_name);
+    my $column_def = $connection->column($table, lc ($column), $schema);
+    $connection->close();
+    return undef unless $column_def;    
+    return exists ($column_def->{nullable}) ? ! $column_def->{nullable} : undef;
+}
+
+
+{
+    my @data_type_aliases = (
+        ['TEXT', 'VARCHAR', 'CHARACTER VARYING', 'VARCHAR2'],
+        ['BPCHAR', 'CHAR', 'CHARACTER'],
+        ['NUMERIC', 'FLOAT', 'DOUBLE PRECISION', 'DECIMAL'],
+    );
+
+
+=item _check_type_family
+
+Checks data type familes, tests if the specified testes type belongs to the same group as db_type (or dbi type)
+There are currently the following synonyms for the familes
+
+    - 'TEXT', 'VARCHAR', 'CHARACTER VARYING', 'VARCHAR2'
+    - 'BPCHAR', 'CHAR', 'CHARACTER'
+    - 'NUMERIC', 'FLOAT'
+
+=cut
+
+sub _check_type_family {
+    my ($self, $tested_type, $db_type) = @_;
+    my $result;
+    for my $type_family (@data_type_aliases) {
+        if (scalar (grep {($tested_type =~ /$_/) || $db_type eq $_} @$type_family) > 1) {
+                $result = $tested_type;
+                last;
+        }
+    }
+    unless($result) {
+        $result = (lc($tested_type) eq lc $db_type) || ($tested_type =~ /\(/ && $tested_type =~ /$db_type/);
+    }
+
+    return $result ;
+}
+
+=item _data_type_aliases
+
+=cut
+
+sub _data_type_aliases {
+    \@data_type_aliases;
+}
+
+=item _match_data_type
+
+Returns undef if the specified data type matches undelying database type otherwise type name
+
+=cut
+
+    sub _match_data_type {
+        my ($self, $tested_type, $dbi_type, $width, $db_type) = @_;
+        my ($expected_width) = ($tested_type =~ /\(([^\)]+)/);
+        my $result = $self->_check_type_family($tested_type, $dbi_type);
+        if ($result && $expected_width) {
+            $result = ($expected_width eq $width);
+        }
+
+        return $result ? undef : $db_type
+            || ($dbi_type . (($dbi_type =~ /CHAR|NUM|FLOAT/ && $width > 0) ? "(${width})" : ''));
+    }
+}
+
+
+=item column_type_is
+
+Returns true if the specified column's type for given table matches 
+underlying column type  otherwise undef;
+Check additionally failed_test_info method.
+
+    $dbunit->column_type_is($schema, $table, $columm, $type);
+    $dbunit->column_type_is($table, $columm, $type);
+
+=cut
+
+sub column_type_is {
+    my ($self, @args) = @_;
+    my ($table, $column, $type, $schema) = (@args == 3) ? @args : @args[1,2,3,0];
+    $self->_set_failed_test_info('');
+    my $connection = DBIx::Connection->connection($self->connection_name);
+    my $column_def = $connection->column($table, lc ($column), $schema);
+    $connection->close();
+    unless ($column_def) {
+        $self->_set_failed_test_info(sprintf("column %s doesn't exists in table %s", $column, $table));
+        return undef;
+    }
+    my $type_ref = $column_def->{type_info} || {};
+    my ($type_name, $width) = ($type_ref->{TYPE_NAME}, $column_def->{width});
+    if($column_def->{db_type}) {
+        ($type_name, $width) = ($column_def->{db_type} =~ /([^\(]+)\(([^\)]+)\)/);
+        $type_name = $column_def->{db_type}
+            unless $type_name;
+    }
+    if(my $result = $self->_match_data_type(uc($type), uc($type_name), $width, uc $column_def->{db_type})) {
+        $self->_set_failed_test_info(sprintf("got %s type: %s\nexpected: %s", $column, $result, $type));
+        return undef;
+    }
+    return !! $self;
+}
+
+
+=item column_default_is
+
+Returns true if the specified column's default value matches database definition otherwise undef.
+Check additionally failed_test_info.
+
+    $dbunit->column_default_is($schema, $table, $columm, $default);
+    $dbunit->column_default_is($table, $columm, $default);
+
+=cut
+
+sub column_default_is {
+    my ($self, @args) = @_;
+    my ($table, $column, $default, $schema) = (@args == 3) ? @args : @args[1,2,3,0];
+    my $connection = DBIx::Connection->connection($self->connection_name);
+    my $column_def = $connection->column($table, lc ($column), $schema);
+    $self->_set_failed_test_info('');
+    $connection->close();
+    unless ($column_def) {
+        $self->_set_failed_test_info(sprintf("column %s doesn't exists in table %s", $column, $table));
+        return undef;
+    }
+    unless($column_def->{default} =~ /$default/) {
+        $self->_set_failed_test_info(sprintf("got default value: %s\nexpected: %s", $column_def->{default}, $default));
+        return undef;
+    }
+    return !! $self;
+}
+
+
+=item column_is_unique
+
+Returns true if the specified column for given table has unique constraint.
+
+    $dbunit->column_is_unique($schema, $table, $column);
+    $dbunit->column_is_unique($table, $column);
+
+=cut
+
+sub column_is_unique {
+    my ($self, @args) = @_;
+    my ($table, $column, $schema) = (@args == 2) ? @args : @args[1,2,0];
+    $self->_set_failed_test_info('');
+    my $connection = DBIx::Connection->connection($self->connection_name);
+    my $column_def = $connection->column($table, lc ($column), $schema);
+    $connection->close();
+    return undef unless $column_def;
+    return $column_def->{unique};
+}
+
+
+=item has_pk
+
+Returns true if the specified column or columns are part of the primary key
+for the given table.
+
+    my $columns = ['id']; #or my $columns = ['master_id', 'seq_no']; 
+
+    $dbunit->has_pk($table, $columns);
+    $dbunit->has_pk($schema, $table, $columns);
+
+
+    $dbunit->has_pk($table, $column);
+    $dbunit->has_pk($schema, $table, $column);
+
+    $dbunit->has_pk($table);
+    $dbunit->has_pk($schema, $table);
+
+=cut
+
+sub has_pk {
+    my ($self, $schema, $table, $columns) = @_;
+    my $connection = DBIx::Connection->connection($self->connection_name);
+    my @primary_key_columns = $table && (! ref $table) ? $connection->primary_key_columns($table, $schema) : ();
+    $self->_set_failed_test_info("");
+    my $result;
+    unless (@primary_key_columns) {
+        $columns = $table;
+        $table = $schema;
+        $schema = undef;
+        @primary_key_columns = $connection->primary_key_columns($table, $schema)
+    }
+    $connection->close;
+    $result = !! @primary_key_columns;
+    unless($result) {
+        $self->_set_failed_test_info(sprintf("primary key doesn't exist on table %s", $table));
+    }
+    if ($result && $columns) {
+        $columns = [$columns] unless ref($columns);
+        for my $colunm (@$columns) {
+            if(grep {$_ eq $colunm} @primary_key_columns) {
+                $result = 1;
+            } else {
+                $result = undef;
+                last;
+            }
+        }
+        unless($result) {
+            $self->_set_failed_test_info(sprintf("%s primary key columns don't match got: %s\nexpected: %s ",
+                $table,
+                join(", ",@$columns),
+                join(", ", @primary_key_columns)
+            ));
+        }
+    }
+    return $result;
+}
+
+
+
+=item has_fk
+
+Returns true if the specified column or columns for given table are part
+of the foreign key for the referenced table.
+
+    my $columns = ['id']; #or my $columns = ['master_id', 'seq_no']; 
+    $dbunit->has_fk($schema, $table, $columns, $referenced_schema, $referenced_table);
+    $dbunit->has_fk($table, $columns, $referenced_table);
+
+=cut
+
+sub has_fk {
+    my ($self, @args) = @_;
+    my ($table, $columns, $referenced_table, $schema, $referenced_schema) = (@args == 3)
+        ? @args : @args[1, 2, 4, 0, 3];
+    my $connection = DBIx::Connection->connection($self->connection_name);
+    $self->_set_failed_test_info("");
+    my @foreign_key_columns = $connection->foreign_key_columns($table, $referenced_table);
+    $connection->close;
+    my $result = !! @foreign_key_columns;
+    if($result) {
+        $columns = [$columns] unless ref($columns);
+        for my $i (0 .. $#foreign_key_columns) {
+            if(lc $columns->[$i] ne $foreign_key_columns[$i]) {
+                $result = undef;
+                last;
+            } else {
+                $result = 1;
+            }
+        }
+        unless($result) {
+            $self->_set_failed_test_info(sprintf("%s->%s foreign key columns don't match got: %s\nexpected: %s ",
+                    $table, $referenced_table,
+                    join(", ",@$columns),
+                    join(", ", @foreign_key_columns)
+                ));
+            }
+    } else {
+        $self->_set_failed_test_info(sprintf("foreign key doesn't exist for tables %s AND %s", $table, $referenced_table));
+    }
+    
+    return $result;
+}
+
+
+=item has_index
+
+Returns true if the specified column or columns are part of the index
+for the given table.
+
+    my $columns = ['id']; #or my $columns = ['master_id', 'seq_no']; 
+
+    $dbunit->has_index($table, $index, $column_or_expressions);
+    $dbunit->has_index($schema, $table, $index, $column_or_expressions);
+
+    $dbunit->has_index($table, $index, $columns);
+    $dbunit->has_index($schema, $table, $index, $columns);    
+    
+    $dbunit->has_index($table, $index);
+    $dbunit->has_index($schema, $table, $index);
+
+=cut
+
+sub has_index {
+    my ($self, $schema, $table, $index, @args) = @_;
+    my $connection = DBIx::Connection->connection($self->connection_name);
+    $self->_set_failed_test_info('');
+    my $index_info = $connection->index_info($index, $schema, $table);
+    my $columns;
+    my $result;
+    if(! $index_info || !@$index_info) {
+        $columns = $index;
+        $index = $table;
+        $table = $schema;
+        $schema = undef;
+        $index_info = $connection->index_info($index, $schema, $table);
+        $connection->close;
+            return $result
+                if (!$index_info || !@$index_info);
+    }
+    $connection->close;
+    
+    if(lc($index_info->[0]->{table_name}) ne lc($table)) {
+        $self->_set_failed_test_info(sprintf("index %s doesn't match table got: %s\nexpected: %s",
+            lc($index_info->[0]->{table_name}),
+            lc($table)
+        ));
+    }
+    $columns = ($index && @args ? shift @args : undef)
+        unless $columns;
+    if($columns) {
+        $columns = [$columns] unless ref($columns);
+        my @index_columns = map {$_->{column_name}} @$index_info;
+        for my $i(0 .. $#index_columns) {
+            if(lc $index_columns[$i] ne lc $columns->[$i]) {
+                $result = undef;
+                last;
+            } else {
+                $result = 1;
+            }
+        }
+        
+        $self->_set_failed_test_info(sprintf("index %s columns don't match got: %s\nexpected: %s",
+            $index,
+            join (', ', @index_columns),
+            join (', ', @$columns)));
+    } else {
+        $result = 1;
+    }
+    return $result;
+}
+
+
+=item index_is_unique
+
+Returns true if the specified index is unique.
+
+    $dbunit->index_is_unique($schema, $table, $index);
+    $dbunit->index_is_unique($table, $index);
+
+=cut
+
+sub index_is_unique {
+    my ($self, @args) = @_;
+    my ($table, $index, $schema) = (@args == 2) ? @args : @args[1,2,0];
+    $self->_set_failed_test_info('');
+    my $connection = DBIx::Connection->connection($self->connection_name);
+    my $index_info = $connection->index_info($index, $schema, $table);
+    $connection->close;
+    return undef if(! $index_info || !@$index_info);
+    return !! $index_info->[0]->{is_unique};
+}
+
+
+=item index_is_primary
+
+Returns true if the specified index is primary key.
+
+    $dbunit->index_is_primary($schema, $table, $index);
+    $dbunit->index_is_primary($table, $index);
+
+=cut
+
+sub index_is_primary {
+    my ($self, @args) = @_;
+    my ($table, $index, $schema) = (@args == 2) ? @args : @args[1,2,0];
+    $self->_set_failed_test_info('');
+    my $connection = DBIx::Connection->connection($self->connection_name);
+    my $index_info = $connection->index_info($index, $schema, $table);
+    $connection->close;
+    return undef if(! $index_info || !@$index_info);
+    return !! ($index_info->[0]->{is_pk});
+}
+
+
+=item index_is_type
+
+Returns true if the specified index's type is the index type
+from underlying database, otherwise undef.
+Check additionly failed_test_info method.
+
+    $dbunit->index_is_type($schema, $table, $index, $type);
+    $dbunit->index_is_type($table, $index, $type);
+
+=cut
+
+sub index_is_type {
+    my ($self, @args) = @_;
+    my ($table, $index, $type, $schema) = (@args == 3) ? @args : @args[1,2,3,0];
+    $self->_set_failed_test_info('');
+    my $connection = DBIx::Connection->connection($self->connection_name);
+    my $index_info = $connection->index_info($index, $schema, $table);
+    $connection->close;
+    $self->_set_failed_test_info('');
+    if(! $index_info || !@$index_info) {
+        $self->_set_failed_test_info("index ${index} doesn't exist");
+    }
+    
+    if (lc($index_info->[0]->{index_type}) ne $type) {
+        $self->_set_failed_test_info(sprintf("got index type: %s\nexpected: %s", $index_info->[0]->{index_type}, $type));
+        return undef;
+    }
+    return $self;
+}
+
+
+=item has_trigger
+
+Returns true if the specified trigger exists for the given table.
+
+    $dbunit->has_trigger($schema, $table, $trigger);
+    $dbunit->has_trigger($table, $trigger);
+
+=cut
+
+sub has_trigger {
+    my ($self, @args) = @_;
+    my ($table, $trigger, $schema) = (@args == 2) ? @args : @args[1,2,0];
+    $self->_set_failed_test_info('');
+    my $connection = DBIx::Connection->connection($self->connection_name);
+    my $trigger_info = $connection->trigger_info($trigger, $schema)
+        or return undef;
+    return undef
+        if (lc($trigger_info->{table_name}) ne lc($table));
+    return !! $trigger_info
+}
+
+
+=item trigger_is
+
+Returns true if the specified trigger body matches the trigger body (or funtion in case of postgresql)
+for given table, otherwise undef check additionaly failed_test_info method.
+
+
+    $dbunit->trigger_is($schema, $table, $trigger, $trigger_body);
+    $dbunit->trigger_is($table, $trigger, $trigger_body);
+
+=cut
+
+sub trigger_is {
+    my ($self, @args) = @_;
+    my ($table, $trigger, $trigger_body, $schema) = (@args == 3) ? @args : @args[1,2,3,0];
+    $self->_set_failed_test_info('');
+    my $connection = DBIx::Connection->connection($self->connection_name);
+    my $trigger_info = $connection->trigger_info($trigger, $schema);
+    $self->_set_failed_test_info('');
+    unless ($trigger_info) {
+        $self->_set_failed_test_info(sprintf("trigger %s doesn't exist", $trigger));
+    }
+
+    if (lc($trigger_info->{table_name}) ne lc($table)) {
+        $self->_set_failed_test_info(sprintf("trigger %s doesn't exist for table %s, \ntrigger is defined on %s table",
+            $trigger,
+            ($trigger_info->{table_name} || ''),
+            $table)
+        );
+        return undef;
+    }
+    
+    my $trigger_func = $trigger_info->{trigger_func} || '';
+    my $trigger_body_ =  $trigger_func . ' ' . $trigger_info->{trigger_body} ;
+    unless($trigger_body_ =~ /$trigger_body/i) {
+        $self->_set_failed_test_info(sprintf("got body: %s\nexpected: %s",$trigger_body, $trigger_body_));
+        return undef;
+    }
+    return $self;
+}
+
+
+=item has_routine
+
+Returns true if the specified routine exists and have matched prototype
+
+    my $args = ['type1', 'type2', 'return_type'];
+    or
+    my $args = ['IN type1', 'OUT type2', 'type3'];
+    or
+    my $args = ['name1 type1', 'name2 type2', 'return type3'];
+    or
+    my $args = ['IN name1 type1', 'INOUT name2 type2', 'return type3'];
+    
+    $dbunit->has_routine($schema, $function);
+    $dbunit->has_routine($function);
+    $dbunit->has_routine($schema, $function, $args);
+    $dbunit->has_routine($function, $args);
+
+In case of testing function arguments, the last one is the function return type.
+Check additionaly failed_test_info method.
+
+=cut
+
+sub has_routine {
+    my ($self, $schema, $function, $args) = @_;
+    my $connection = DBIx::Connection->connection($self->connection_name);
+    $self->_set_failed_test_info('');
+    my $functions_info = $connection->routine_info($function, $schema);
+    $self->_set_failed_test_info('');
+    if (! $functions_info) {
+        $args = $function;
+        $function = $schema;
+        $schema = undef;
+        $functions_info = $connection->routine_info($function, $schema);
+        unless  ($functions_info) {
+            $self->_set_failed_test_info(sprintf("function %s doesn't exist", $function));
+            return undef
+        }
+    }
+
+    my $result = 1;
+    if($args) {
+        $args =[$args] unless ref($args) eq 'ARRAY';
+        $result = undef;
+        for my $routine_info (@$functions_info) {
+            my $routine_args = $routine_info->{args};
+            
+            push @$routine_args, {type => $routine_info->{return_type}, name => 'return', mode => 'return'}
+                if $routine_info->{return_type};
+
+            for my $i (0 .. $#{$routine_args}) {
+                my $res = $self->_validate_routine_argument($routine_args->[$i], $args->[$i], $routine_info);
+                if($res) {
+                    $result = 1;
+                } else {
+                    $result = undef;
+                    last;
+                }
+            }
+            last if $result;
+        }
+
+        unless($result) {
+            $self->_set_failed_test_info(sprintf("function %s doesn't match the specified arguments %s\nexistsing prototyes: %s",
+                $function,
+                join (', ',@$args),
+                join ("\n", map { $function .'(' . $_->{routine_arguments} .')'
+                . ($_->{return_type} ? ' RETURNS ' . $_->{return_type} : '') } @$functions_info))
+            );
+        } else {
+            $self->_set_failed_test_info('');
+        }
+    }
+    return $result;
+}
+
+
+=item _validate_routine_argument
+
+=cut
+
+sub _validate_routine_argument {
+    my ($self, $routine_arg, $arg, $routine_info) = @_;
+    my $mode = ($arg =~ s/(IN OUT|IN|OUT|INOUT) //i) ? $1 : undef;
+    
+    if ($mode && lc($mode) ne lc $routine_arg->{mode}) {
+        return undef;
+    }
+    
+    my ($name, $type) = ($arg =~ /([^\s]+)\s+([^\s]+)/);
+    $type = $arg unless $type;
+
+    if ($name && lc($name) ne lc($routine_arg->{name})) {
+        return undef;
+    }
+
+    if ($type && ! $self->_check_type_family(lc($type), lc($routine_arg->{type}))) {
+        return undef;
+    }
+    return 1;
+}
+
+
+
+=item _set_failed_test_info
+
+=cut
+
+sub _set_failed_test_info {
+    my ($self, $value) = @_;
+    $self->{_failed_test_info} = $value;
+}
+
+
+=item failed_test_info
+
+Stores the last failed test detail.
+
+=cut
+
+sub failed_test_info {
+    shift()->{_failed_test_info} ||'';
+}
+
+
+=item routine_is
+
+Returns true if the specified function mathes passed in body
+
+
+    $dbunit->has_routine($schema, $function, $args, $routine_body);
+    $dbunit->has_routine($function, $args. $routine_body);
+
+=cut
+
+sub routine_is {
+    my ($self, @args) = @_;
+    my ($table, $function, $routine_body, $schema) = (@args == 2) ? @args : @args[1,2,3,0];
+    my $connection = DBIx::Connection->connection($self->connection_name);
+    my $functions_info = $connection->routine_info($function, $schema);
+    if (! $functions_info) {
+        $routine_body = $function;
+        $function = $schema;
+        $schema = undef;
+        $functions_info = $connection->routine_info($function, $schema)
+            or return undef
+    }
+    my $result;
+    foreach my $routine_info (@$functions_info) {
+        if ($routine_info->{routine_body} =~ /$routine_body/) {
+            $result = 1;
+            last;
+        }
+    }
+    return $result;
+}
+
+
+
 =item xml_dataset
 
-Loads xml file to dataset and populate/synchronize it to the database schema.
+Loads xml file to dataset and populates/synchronizes it to the database schema.
 Takes xml file as parameter.
 
     <dataset load_strategy="INSERT_LOAD_STRATEGY" reset_sequences="emp_seq">
@@ -281,6 +1114,7 @@ sub expected_xml_dataset {
     $self->apply_properties($xml->{properties});
     $self->expected_dataset(@{$xml->{dataset}});
 }
+
 
 
 =item apply_properties
@@ -326,20 +1160,36 @@ Removes existing schema
 
 =cut
 
-sub drop_objects{
+sub drop_objects {
     my ($self, @objects) = @_;
     my $connection = DBIx::Connection->connection($self->connection_name);
     for my $object (@objects) {
         next if ($object =~ /^\d+$/);
-        if($object =~ m/table\s+(\w+)/i) {
+        
+        if($object =~ m/table\s+`*(\w+)`*/i) {
             my $table = $1;
             $connection->do("DROP $object") 
                 if $connection->has_table($table);
+        } elsif($object =~ m/view\s+`*(\w+)`*/i) {
+            my $table = $1;
+            $connection->do("DROP $object") 
+                if $connection->has_view($table);
                 
-        } elsif($object =~ m/sequence\s+(\w+)/i) {
+        } elsif($object =~ m/sequence\s+`*(\w+)`*/i) {
             my $sequence = $1;
             $connection->do("DROP $object")
                 if $connection->has_sequence($sequence);
+        } elsif(($object =~ m/(procedure)\s+`*(\w+)`*/i) || ($object =~ m/(function)\s+`*(\w+)`*/i)) {
+            my ($type, $function) = ($1,$2);
+            if (my $routines_info = $connection->routine_info($function)) {
+                for my $routines_info(@$routines_info) {
+                    next if(lc($type) eq  'procedure' && $routines_info->{return_type});
+                    my $declation = '(' . $routines_info->{routine_arguments} . ')';
+                    $connection->do("DROP $object "
+                        . ((lc($connection->dbms_name) eq 'postgresql') ? $declation : ''));
+                }
+                
+            }
         }
         
     }
@@ -371,28 +1221,24 @@ Returns list of pairs values('object_type object_name', create_sql, ..., 'object
 sub objects_to_create {
     my ($self, $sql) = @_;
     my @result;
-    my @create_sql = split /;/, $sql;
+    my @create_sql = split /CREATE/i, $sql;
+    
     my $i = 0;
     my $plsql_block = "";
     my $inside_plsql_block;
+
     for my $sql_statement (@create_sql) {
         next unless ($sql_statement =~ /\w+/);
-        my ($object) = ($sql_statement =~ m/create\s+(\w+\s+\w+)/i);
-        if ($sql_statement =~ /begin/i) {
-            $inside_plsql_block = 1 ;
-            $plsql_block .= $sql_statement .";";
-            next;
-        } elsif ($sql_statement =~ /end$/i) {
-            $sql_statement = $plsql_block . $sql_statement .";";
-            $inside_plsql_block = 0;
-            $plsql_block = "";
-        } elsif ($inside_plsql_block) {
-            $plsql_block .= $sql_statement . ";";
-            next;
+        my ($object) = ($sql_statement =~ m/^\s+or\s+replace\s+(\w+\s+\w+)/i);
+        unless($object) {
+            ($object, my $name) = ($sql_statement =~ m/^\s+(\w+)\s+if\s+not\s+exists\s+(\w+)/i);
+            $object .= " " . $name if $name;
         }
-
-        $object = $i++ unless $object;
-        $sql_statement =~ s/^[\n\r\s]+//m if ($sql_statement =~ m/^[\n\r\s]+/m);
+        unless($object) {
+            ($object) = ($sql_statement =~ m/^\s+(\w+\s+\w+)/i);
+        }
+        $sql_statement =~ s/[;\n\r\s]+$//g;
+        $sql_statement = "CREATE" . $sql_statement . ($object =~ /trigger|function|procedure/i ? ';': '');
         push @result, $object, $sql_statement;
     }
     @result;
@@ -791,13 +1637,13 @@ Returns undef if there is not difference, otherwise difference details.
 sub compare_datasets {
     my ($dataset, $exp_dataset, $table_name, @keys) = @_;
     for my $k (@keys) {
-  	    if (ref $exp_dataset->{$k}) {
-    	    my $result = $exp_dataset->{$k}->($dataset->{$k});
-	        return "found difference in $table_name $k:"
-  		    . "\n  " . format_values($dataset, @keys)
-      		unless $result;
-	        next;
-  		}
+        if (ref $exp_dataset->{$k}) {
+            my $result = $exp_dataset->{$k}->($dataset->{$k});
+             return "found difference in $table_name $k:"
+                . "\n  " . format_values($dataset, @keys)
+                unless $result;
+             next;
+        }
         return "found difference in $table_name $k:"
         . "\n  " . format_values($exp_dataset, @keys)
         . "\n  " . format_values($dataset, @keys)
@@ -906,7 +1752,7 @@ sub primary_key_hash_value {
                     # hacky
                     my $children_result = $parent->children_hash_result;
                     my $value = $element->value(1);
-		   unless(scalar %$attributes) {
+                    unless(scalar %$attributes) {
                         $children_result->{$element->name} = eval "sub { $value }";
                    } else {
                         $element->validate_attributes([], {size_column => undef, file => undef});
@@ -944,7 +1790,7 @@ Loads xml
 =cut
 
 sub load_xml {
-    my ($self, $file) = @_;    
+    my ($self, $file) = @_;
     my $xml = $self->xml_dataset_handler;
     $xml->parse_file($file);
 }

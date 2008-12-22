@@ -1,5 +1,35 @@
 Revision history for Perl extension Test::DBUnit.
 
+0.16 Mon Dec 22 2008
+    - added plsql / excpetion test methods:
+	execute_ok
+	throws_ok
+
+    - added schema tests methods:
+
+	execute_ok
+	throws_ok
+	has_table
+	hasnt_table
+	has_view
+	hasnt_view
+	has_column
+	hasnt_column
+	has_columns
+	column_is_null
+	column_is_not_null
+	column_type_is_ok
+	has_pk
+	has_fk
+	has_index
+	index_is_unique
+	index_is_primary
+	index_is_type
+	has_trigger
+	trigger_is
+	has_routine
+
+
 0.15 Mon Nov 24 2008
     - Fix generator tests
 

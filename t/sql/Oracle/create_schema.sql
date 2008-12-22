@@ -7,6 +7,7 @@ CREATE TABLE dept (
  loc    VARCHAR2(20)
 ); 
 
+
 CREATE TABLE emp(
  empno      NUMBER NOT NULL,
  ename      VARCHAR2(10),
@@ -20,11 +21,11 @@ CREATE TABLE emp(
  FOREIGN KEY (deptno) REFERENCES dept (deptno) 
 );
 
-CREATE OR REPLACE TRIGGER emp_autogen
-BEFORE INSERT ON emp FOR EACH ROW
+CREATE OR REPLACE TRIGGER emp_auto BEFORE INSERT ON emp FOR EACH ROW
 BEGIN
     IF :new.empno is null then
         SELECT emp_seq.nextval INTO :new.empno FROM dual;
+        NULL;
     END IF;
 END;
 
@@ -50,6 +51,16 @@ CREATE TABLE emp_project(
   FOREIGN KEY (projno) REFERENCES project(projno)
 );
 
+CREATE TABLE emp_project_details (
+  id NUMBER, 
+  projno NUMBER,
+  empno NUMBER,
+  description VARCHAR2(100),
+  CONSTRAINT emp_proj_det_pk PRIMARY KEY(id),
+  FOREIGN KEY (empno, projno) REFERENCES emp_project(empno, projno)
+); 
+CREATE INDEX emp_project_details_idx ON emp_project_details(description, id);
+
 
 CREATE TABLE seq_generator
 (
@@ -60,7 +71,33 @@ CREATE TABLE seq_generator
 
 CREATE TABLE lob_test(
 id NUMBER,
-name VARCHAR2(100),
+name VARCHAR2(100) DEFAULT  'doc',
 doc_size NUMBER,
 blob_content BLOB
 );
+
+CREATE OR REPLACE view emp_view AS SELECT * FROM emp;
+
+
+CREATE OR REPLACE TRIGGER aa_emp_project_details BEFORE INSERT ON emp_project_details FOR EACH ROW
+BEGIN
+    IF :new.empno is null then
+        -- RETURN new;
+        -- aa_emp_project_details
+        NULL;
+    END IF;
+END;
+
+
+CREATE OR REPLACE PROCEDURE test1(var1 OUT varchar2, var2 IN OUT  varchar2, var3 IN varchar2) AS
+BEGIN
+    SELECT 10 INTO var1 FROM dual;
+    var2 := 360;
+END;
+
+
+CREATE OR REPLACE FUNCTION hello(s CHAR)
+RETURN CHAR AS
+BEGIN
+RETURN 'Hello ' ||s;
+END;

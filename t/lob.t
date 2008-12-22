@@ -40,6 +40,7 @@ SKIP: {
         dsn      => $ENV{DB_TEST_CONNECTION},
         username => $ENV{DB_TEST_USERNAME},
         password => $ENV{DB_TEST_PASSWORD},
+        no_cache => 1,
     );
 
     {

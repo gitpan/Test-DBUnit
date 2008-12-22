@@ -1,7 +1,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 41;
+use Test::More tests => 97;
 
 my $class;
 
@@ -34,9 +34,10 @@ CREATE TABLE table2
   col1 varchar(128)
 );
 
+CREATE OR REPLACE FUNCTION emp_project_details() RETURNS trigger AS '
 BEGIN
 do dome stuff;
-END;
+END' plsql;
 
 CREATE SEQUENCE seq1;
 ";
@@ -49,9 +50,12 @@ CREATE SEQUENCE seq1;
   id integer,
   col1 varchar(128)
 )',
-    0 => 'BEGIN
+
+    'FUNCTION emp_project_details' => "CREATE OR REPLACE FUNCTION emp_project_details() RETURNS trigger AS '
+BEGIN
 do dome stuff;
-END;',
+END' plsql;",
+    
     'SEQUENCE seq1' => 'CREATE SEQUENCE seq1'
 }, 'should have list of table to create');
 }
@@ -113,7 +117,7 @@ VALUES(20, \'IT\', \'Katowice;\')',
 
 SKIP: {
     
-    skip('missing env varaibles DB_TEST_CONNECTION, DB_TEST_USERNAME DB_TEST_PASSWORD', 31)
+    skip('missing env varaibles DB_TEST_CONNECTION, DB_TEST_USERNAME DB_TEST_PASSWORD', 87)
 
       unless $ENV{DB_TEST_CONNECTION};
     use DBIx::Connection;
@@ -360,5 +364,144 @@ SKIP: {
     ok(!$dbunit->dataset(emp => []), 'should sunc database to dataset');
     my $record = $connection->record("SELECT count(*) as rows_number FROM emp");
     is($record->{rows_number}, 0, "should delete all rows from emp");
+    
+    if($connection->dbms_name eq 'Oracle') {
+        {
+            my $result = $dbunit->execute('SELECT SYSDATE INTO :var FROM dual');
+            ok($result->{var}, 'should have date');
+        }
+        {
+            my $result = $dbunit->execute('
+                SELECT 10 INTO :var1 FROM dual;
+                :var2 := 360
+
+            ');
+            is($result->{var1}, 10, 'should have var1 bind variable value');
+            is($result->{var2}, 360, 'should have var2 bind variable value');
+        }
+        {
+            my ($error_code, $error_message) = $dbunit->throws(':var := 100/0');
+            is($error_code, 1476, 'should have error code');
+            ok($error_message, 'should have error message');
+        }
+        {
+            my ($error_code, $error_message) = $dbunit->throws(':var := 100/1');
+            ok(! $error_code, 'should not have error code');
+            ok(! $error_message, 'should not have error message');
+        }
+
+    } else {
+        {
+            my $result = $dbunit->execute('SELECT NOW() INTO :var');
+            ok($result->{var}, 'should have date');
+        }
+        {
+            my $result = $dbunit->execute('
+                SELECT 10 INTO :var1;
+                :var2 := 360
+            ');
+            is($result->{var1}, 10, 'should have var1 bind variable value');
+            is($result->{var2}, 360, 'should have var2 bind variable value');
+        }
+        {
+            my ($error_code, $error_message) = $dbunit->throws(":var := dummy_fake_func('1')");
+            ok ($error_code, 'should have error code');
+            ok($error_message, 'should have error message');
+        }
+        {
+            my ($error_code, $error_message) = $dbunit->throws(':var := 100/1');
+            ok(! $error_code, 'should not have error code');
+            ok(! $error_message, 'should not have error message');
+        }
+    }
+    
+    {    
+    
+        ok($dbunit->has_table('emp'), 'should have table emp');
+        ok(! $dbunit->has_table('fake_emp'), 'should not have table fake_emp');
+
+        ok($dbunit->has_view('emp_view'), 'should have emp_view');
+        ok(! $dbunit->has_view('fake_emp'), 'should not have view fake_emp');
+
+        ok($dbunit->has_column('emp', 'ename'), 'should have ename colunm on emp table');
+        ok(! $dbunit->has_column('emp', 'ename2'), 'should not have ename2 colunm on emp table');
+        
+        ok($dbunit->has_columns('dept', ['deptno', 'dname', 'loc']), 'should have all emp columns');
+        ok(! $dbunit->has_columns('dept', ['deptno', 'dname', 'loc1']), 'should not have all emp columns');
+        ok($dbunit->failed_test_info, 'should have failure info');
+        ok(! $dbunit->column_is_null('emp', 'empno'), 'should not have emono colunm nullabe');
+        ok($dbunit->column_is_null('emp', 'sal'), 'should have sal colunm nullable');
+        
+        ok($dbunit->column_is_not_null('emp', 'empno'), 'should have column not nullable');
+        ok(! $dbunit->column_is_not_null('emp', 'ename'), 'should have column nullable');
+        
+        
+        ok($dbunit->column_type_is('emp', 'job', 'VARCHAR(20)'), 'should have job column as varchar(20)');
+        
+        ok($dbunit->column_type_is('emp', 'hiredate','date'), 'should have column as data type');
+        
+        ok($dbunit->column_default_is('lob_test', 'name', 'doc'), 'should have default value for column name');
+        ok($dbunit->column_is_unique('emp', 'empno'), 'should have column unique');
+        
+        ok( $dbunit->has_pk('emp', 'empno'), 'should have pk on(empno)');
+        ok( $dbunit->has_pk('emp'), 'table emp should have pk');
+        
+        ok(! $dbunit->has_pk('emp', 'ename'), 'should not have pk on ename');
+        ok(! $dbunit->has_pk('bonus', ['ename']), 'should not have pk');
+        ok($dbunit->has_pk('emp_project', ['empno', 'projno']), 'should have pk on emp_project');
+        
+        ok($dbunit->has_fk('emp', ['deptno'], 'dept'), 'should have fk on emp -> dept on deptno');
+        ok($dbunit->has_fk('emp_project_details', ['empno', 'projno'], 'emp_project'), 'should have fk on emp_project_details -> emp_project on empno, projno');
+        ok(! $dbunit->has_fk('emp', ['deptno1'], 'dept'), 'should not have fk on emp -> dept on deptno1');
+        ok(! $dbunit->has_fk('emp', ['deptno'], 'dept2'), 'should not have fk on emp -> dept2 on deptno');
+        
+        ok($dbunit->has_index('emp_project_details', 'emp_project_details_idx'), 'should have index  emp_project_details_idx'); 
+        
+        ok($dbunit->has_index('emp_project_details', 'emp_project_details_idx', ['description','id']), 'should have index  emp_project_details_idx');
+        
+        ok(! $dbunit->has_index('emp_project_details', 'emp_project_details_idx', ['description']), 'should not detect index emp_project_details_idx(description)');
+        ok(! $dbunit->has_index('emp_project_details', 'emp_project_details_idx1', ['description','id']), 'should not have index  emp_project_details_idx1');
+        
+        ok( $dbunit->index_is_unique('emp', 'emp_pk'), 'should have unique index');
+        
+        
+        ok(!  $dbunit->index_is_primary('emp_project_details', 'emp_project_details_func'), 'should not have unique index');
+        ok(!  $dbunit->index_is_unique('emp_project_details', 'emp_project_details_func'), 'should not have pk index');
+        
+        ok($dbunit->has_trigger('emp_project_details','aa_emp_project_details'), 'shold have trigger');
+        
+        ok(! $dbunit->has_trigger('emp_project_details1','aa_emp_project_details'), 'shold not have trigger for fake table');
+        ok(! $dbunit->has_trigger('emp_project_details','aa_emp_project_details1'), 'shold not have fake trigger');
+        
+        ok($dbunit->trigger_is('emp_project_details','aa_emp_project_details', 'RETURN new;'), 'should match trigger body');
+        ok(! $dbunit->trigger_is('emp_project_details','aa_emp_project_details', 'abc'), 'should not match trigger body');
+        
+        ok($dbunit->has_routine('test1'), 'should have function');
+        ok(! $dbunit->has_routine('test1', ['OUT int', 'INOUT varchar', 'IN varchar', 'record']), 'should not have function');
+        ok($dbunit->failed_test_info, 'should have failure info');
+                
+        
+        SKIP: {
+            if($connection->dbms_name eq 'PostgreSQL') {
+                ok(! $dbunit->column_type_is('emp', 'job', 'fake'), 'should return db column definition');
+                ok(! $dbunit->column_type_is('bonus', 'job', 'varcahar(30)'), 'should return db column definition');
+                ok($dbunit->column_type_is('emp_project', 'projno', 'numeric'), 'should have column as numberic');
+                ok($dbunit->index_is_primary('emp', 'emp_pk'), 'should have pk index');
+                ok($dbunit->has_index('emp_project_details', 'emp_project_details_func' , "COALESCE(description, '1')"), 'should have index  emp_project_details_func -> COALESCE');
+                ok($dbunit->has_index('emp_project_details', 'emp_project_details_func'), 'should have index  emp_project_details_func');
+                ok($dbunit->trigger_is('emp_project_details','aa_emp_project_details', 'emp_project_details'), 'should match trigger body - function');
+                ok($dbunit->has_routine('test1', ['OUT varchar', 'INOUT varchar', 'IN varchar', 'record']), 'should have function');
+            } else {
+                if($connection->dbms_name eq 'MySQL') {
+                    ok($dbunit->has_routine('test1', ['OUT varchar(100)', 'INOUT varchar(100)', 'IN varchar(100)']), 'should have routine');
+                } else {
+                    ok($dbunit->has_routine('test1', ['OUT varchar2', 'IN OUT varchar2', 'IN varchar2']), 'should have routine');
+                }
+                skip('not supported', 7);
+            }
+        }
+    }
+    
+    
     
 }

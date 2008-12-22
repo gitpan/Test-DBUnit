@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:                Test-DBUnit
-version:             0.15
+version:             0.16
 author:
   - 'Adrian Witas <adrian@webapp.strefa.pl>'
 abstract: Database test framework
@@ -12,7 +12,7 @@ distribution_type:   module
 requires:
     perl:                          5.6.1
     Abstract::Meta::Class:         0
-    DBIx::Connection:              0.09
+    DBIx::Connection:              0.12
     XML::SAX:              	   0
     Simple::SAX::Serializer:       0.05
     Sub::Uplevel:                  0

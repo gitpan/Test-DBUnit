@@ -10,7 +10,7 @@ use IO::File;
 
 use vars qw($VERSION);
 
-$VERSION = '0.2';
+$VERSION = '0.21';
 
 
 =head1 NAME
@@ -55,6 +55,25 @@ This class generates xml or perl test datasets based on passed in sql
 has '$.connection';
 
 
+=item datasets_order
+
+Specifies order of the dataset in the generation result.
+
+    my $generator = Test::DBUnit::Generator->new(
+        connection      => $connection,
+        datasets_order   => ['emp', 'dept'],
+        datasets => {
+            emp => 'SELECT * FROM emp',
+            dept => 'SELECT * FROM demp',
+        },
+    );
+
+
+=cut
+
+has '@.datasets_order';
+
+
 =item datasets
 
 =cut
@@ -83,8 +102,10 @@ sub xml {
     $writer->xmlDecl("UTF-8");
     $writer->startTag("dataset", );
     my $datasets = $self->datasets;
-    foreach my $k (keys %$datasets){
-        my $data = $self->select_dataset($k);
+    my @datasets_order = $self->datasets_order;
+    @datasets_order = keys %$datasets unless @datasets_order;
+    foreach my $k (@datasets_order) {
+    my $data = $self->select_dataset($k);
         for my $row (@$data) {
             $writer->emptyTag($k, %$row);
         }
@@ -106,7 +127,9 @@ sub perl {
     my $datasets = $self->datasets;
     local $Data::Dumper::Indent = 0;
     my $result = '';
-    foreach my $k (keys %$datasets){
+    my @datasets_order = $self->datasets_order;
+    @datasets_order = keys %$datasets unless(@datasets_order);
+    foreach my $k (@datasets_order) {
         my $data = $self->select_dataset($k);
         for my $row (@$data) {
             my $var = Dumper([%$row]);

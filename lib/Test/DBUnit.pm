@@ -11,9 +11,21 @@ use Carp 'confess';
 use Sub::Uplevel qw(uplevel);
 use Test::Builder;
 
-$VERSION = '0.15';
+$VERSION = '0.16';
 
-@EXPORT = qw(expected_dataset_ok dataset_ok expected_xml_dataset_ok xml_dataset_ok reset_schema_ok populate_schema_ok reset_sequence_ok set_refresh_load_strategy set_insert_load_strategy test_connection set_test_connection add_test_connection test_dbh);
+@EXPORT = qw(
+    expected_dataset_ok dataset_ok expected_xml_dataset_ok xml_dataset_ok
+    reset_schema_ok populate_schema_ok reset_sequence_ok set_refresh_load_strategy
+    set_insert_load_strategy test_connection set_test_connection add_test_connection test_dbh
+    execute_ok throws_ok
+    has_table hasnt_table
+    has_view hasnt_view
+    has_column hasnt_column column_is_null column_is_not_null has_columns column_type_is
+    column_default_is column_is_unique
+    has_pk has_fk
+    has_index index_is_unique index_is_primary index_is_type
+    has_trigger trigger_is has_routine
+);
 
 =head1 NAME
 
@@ -124,6 +136,15 @@ You may want to check the result of a update/insert/delete method or a stored pr
         emp   => [empno => "3", ename => "Mark",  deptno => "10", job => "sales assistant"],
         bonus => [ename => "scott", job => "project manager", sal => "20"],
     );
+    
+    expected_dataset_ok(
+        emp   => [empno => "1", ename => "Scott", deptno => "10", job => "project manager"],
+        emp   => [empno => "2", ename => "John",  deptno => "10", job => "engineer"],
+        emp   => [empno => "3", ename => "Mark",  deptno => "10", job => "sales assistant"],
+        bonus => [ename => "scott", job => "project manager", sal => "20"],
+        $description
+    );
+    
     or
 
     expected_xml_dataset_ok('test1');
@@ -154,6 +175,19 @@ true to pass the test, false otherwise.
             }
         ],
         bonus => [ename => "scott", job => "project manager", sal => "20"],
+    );
+
+    expected_dataset_ok(
+        emp   => [empno => "1", ename => "Scott", deptno => "10", job => "project manager"],
+        emp   => [empno => "2", ename => "John",  deptno => "10", job => "engineer"],
+        emp   => [empno => "3", ename => "Mark",  deptno => "10",
+            job => sub {
+                my $value = shift;
+                !! ($value =~ /sales assistant/i);
+            }
+        ],
+        bonus => [ename => "scott", job => "project manager", sal => "20"],
+        $description
     );
 
     or
@@ -211,8 +245,8 @@ In this case update on existing rows will take place or insert occurs if rows ar
 =head3 Tests with multiple database instances.
 
 You may need to test data from more then one database instance,
-so that you have to specify connection againt which tests will be performed
-either by adding prefix to test methods, or by seting explicit test connection context.
+so that you have to specify connection against which tests will be performed
+either by adding prefix to test methods, or by setting explicit test connection context.
 
 
     use Test::DBUnit connection_names => ['my_connection_1', 'my_connection_2'];
@@ -387,9 +421,9 @@ It is advisable to store blob size in separate column to optimize fetch process.
 
 =head3 LOBs tests with PostgreSQL
 
-PostgreSQL has a large object facility, but in this case the tested table doesn't contain LOBs type
-but keeps reference to lob_id, created by lo_creat PostgreSQL function.
-It is required to store blob size in separate column to be able fetch blob.(doc_size)
+PostgreSQL has the large object facility, but in this case the tested table doesn't contain LOBs type
+instead it keeps reference to lob_id, created by lo_creat PostgreSQL functions.
+It requires storing blob size in separate column to be able to fetch blob.(doc_size)
 
     CREATE TABLE image(id NUMERIC, name VARCHAR(100), doc_size NUMERIC, blob_content oid)
 
@@ -403,7 +437,7 @@ It is required to store blob size in separate column to be able fetch blob.(doc_
 
 =head3 LOBs test with MySQL
 
-In MySQL, binary LOBs are just fields in the table, so storing blob size is optional.
+In MySQL, binary LOBs are just table fields like any other types , so storing blob size is optional.
 
     CREATE TABLE lob_test(id NUMERIC, name VARCHAR(100), doc_size NUMERIC, blob_content LONGBLOB)
 
@@ -424,14 +458,44 @@ xml_dataset_ok
 reset_schema_ok
 populate_schema_ok
 reset_sequence_ok
+execute_ok
+throws_ok
+has_table
+hasnt_table
+has_view
+hasnt_view
+has_column
+hasnt_column
+has_columns
+column_is_null
+column_is_not_null
+column_type_is_ok
+has_pk
+has_fk
+has_index
+index_is_unique
+index_is_primary
+index_is_type
+has_trigger
+trigger_is
+has_routine
 set_refresh_load_strategy
 set_insert_load_strategy
 add_test_connection
 set_test_connection
 test_connection
 test_dbh
-<connection_name>_(expected_data_set_ok | dataset_ok | expected_xml_dataset_ok | xml_dataset_ok | reset_schema_ok | populate_schema_ok | reset_sequence_ok | set_refresh_load_strategy | set_insert_load_strategy)
 by default.
+
+
+<connection_name>_(expected_data_set_ok | dataset_ok | expected_xml_dataset_ok | xml_dataset_ok |
+            reset_schema_ok | populate_schema_ok | reset_sequence_ok | execute_ok | throws_ok |
+            has_table | hasnt_table | has_view | hasnt_view | has_column | 
+            hasnt_column | has_columns | column_is_null | column_is_not_null column_type_is |  
+            has_pk | has_fk | has_index | index_is_unique | index_is_primary | index_is_type
+            has_trigger | trigger_is | has_routine
+            set_refresh_load_strategy | set_insert_load_strategy)
+by connection_name tags.
 
 =head2 METHODS
 
@@ -585,7 +649,7 @@ Resets database sequence. Takes sequence name as parameter.
 
 =item xml_dataset_ok
 
-Tests database schema population/synch  to the content of the xml file.
+Tests database schema population/sync  to the content of the xml file.
 Takes test unit name, that is used to resolve xml file name.
 Xml file name that will be loaded is build as follow
 <test_file>.<unit_name>.xml
@@ -664,7 +728,14 @@ expect t/sub_dir/001_test.test1.xml file.
 
 =item dataset_ok
 
-Tests database schema population/synch to the passed in dataset.
+Tests database schema population/sync to the passed in dataset.
+
+
+    dataset_ok(
+        $table => $row1,
+        $table => $row2,
+        $description
+    );
 
     dataset_ok(
         table1 => [], #this deletes all data from table1 (DELETE FROM table1)
@@ -677,7 +748,9 @@ Tests database schema population/synch to the passed in dataset.
 
     sub dataset_ok {
         my (@dataset) = @_;
-        my $description = "should load dataset" . test_connection_context();
+        my $description = (@dataset % 2)
+            ? pop(@dataset)
+            : "should load dataset" . test_connection_context();
         my $ok;
         eval {
             $dbunit->dataset(@dataset);
@@ -685,7 +758,7 @@ Tests database schema population/synch to the passed in dataset.
         };
         my $explanation = "";
         $explanation .= "\n" . $@ if $@;
-        $Tester->ok( $ok, $description );
+        $Tester->ok($ok, $description );
         $Tester->diag($explanation) unless $ok;
         $ok;
     }
@@ -699,11 +772,21 @@ Validates database schema against passed in dataset.
         table1 => [col1 => 'va1', col2 => 'val2'], 
     )
 
+    expected_dataset_ok(
+        table1 => [col1 => 'va11', col2 => 'val2'],
+        table1 => [col1 => 'va13', col2 => 'val4'],
+        $desctiption
+    );
+
+
+
 =cut
 
     sub expected_dataset_ok {
         my (@dataset) = @_;
-        my $description = "should validate expected dataset" . test_connection_context();
+        my $description = (@dataset % 2)
+            ? pop(@dataset)
+            : "should validate expected dataset" . test_connection_context();
         my $validation;
         my $ok;
         eval {
@@ -719,9 +802,713 @@ Validates database schema against passed in dataset.
     }
 
 
+
+=item execute_ok
+
+Tests execution of the plsql code against expected values.
+    
+    execute_ok($plsql, $expected_resultset);
+    execute_ok($plsql, $expected_resultset, $bind_variables_definition);
+    execute_ok($plsql, $expected_resultset, $bind_variables_definition, $description);
+
+    execute_ok("SELECT my_function(NOW()) INTO :var", {var => 360});
+
+=cut
+
+    sub execute_ok {
+        my ($plsql, $expected_resultset, $bind_varialbes_defintion, $description) = @_;
+        $description ||=  "should have expected plsql data " . test_connection_context();
+        my $result;
+        eval {
+            $result = $dbunit->execute($plsql, $bind_varialbes_defintion);
+            
+        };
+        my $explanation = "";
+        $explanation .= "\n" . $@ if $@;
+        my $ok = Test::More::is_deeply($result, $expected_resultset ,$description);
+        $Tester->diag($explanation) unless $ok;
+        $ok;
+    }
+
+
+=item throws_ok
+
+Tests database exceptions.
+
+    throws_ok($sql, $errcode, $errmsg, $description);
+    throws_ok($sql, $errcode, $errmsg);
+    throws_ok($sql, $errmsg);
+    throws_ok($sql, $errmsg, $description);
+    throws_ok($sql, $errcode);
+
+=cut
+
+    sub throws_ok {
+        my ($plsql, @args) = @_;
+        my ($expexted_errcode)= map {($_ =~ /^\d+$/) ? ($_) : ()} @args;
+        my $description = (@args == 3 || (! $expexted_errcode && @args == 2))? pop(@args) : '';
+        my $expexted_errmsg = ($expexted_errcode && @args == 2) ? $args[-1] : $args[0];
+        confess "error message shouldnt conatin error code"
+            if($expexted_errmsg =~ /^\d+$/);
+        
+        my ($errcode, $errmsg);
+        my $explanation = "";
+        my $ok = 1;
+        eval {
+            ($errcode, $errmsg) = $dbunit->throws($plsql);
+            if(defined $expexted_errcode) {
+                $ok = $expexted_errcode eq $errcode;
+            }
+            if($ok && defined $expexted_errmsg) {
+                $ok = ($errmsg =~ /$expexted_errmsg/i);
+            }
+            unless ($ok) {
+                #warn $expexted_errmsg ,' ', $expexted_errcode;
+                if ($expexted_errmsg || $expexted_errcode) {
+                    $explanation = sprintf("caught: %s: %s\nexpected: %s: %s",
+                        ($expexted_errcode  ? $errcode : ''),
+                        ($expexted_errmsg ? $errmsg : ''),
+                        ($expexted_errcode  ? $expexted_errcode : ''),
+                        ($expexted_errmsg ? $expexted_errmsg : ''),
+                    );
+                }
+            }
+        };
+    
+        $explanation .= "\n" . $@ if $@;
+        $Tester->ok( $ok, $description );
+        $Tester->diag($explanation) unless $ok;
+    }
+
+
+=back
+
+=head2 SCHEMA TESTS METHODS
+
+This part focus on testing schema objects like table, column, index, triggers,
+function, procedures.(clear database test)
+
+API of the following methods partly was inspired by PgTap L<http://pgtap.projects.postgresql.org/>
+
+=over
+
+=item has_table
+
+Tests if the specified table exists.
+
+    has_table($schema, $table, $description);
+    has_table($table, $description);
+    has_table($table);
+
+=cut
+
+    sub has_table {
+        my @args = @_;
+        my ($table, $schema) = @args > 2 ? @args [1,0] : $args[0];
+        my $description = (@args > 1)
+            ? pop(@args)
+            : "should have ${table} table" . test_connection_context();
+        my $ok;
+        eval {
+            $ok = $dbunit->has_table($schema ? ($schema, $table) : ($table));
+        };
+        my $explanation = "";
+        $explanation .= "\n" . $@ if $@;
+        $Tester->ok($ok, $description);
+        $Tester->diag($explanation) unless $ok;
+        $ok;
+    }
+
+
+=item hasnt_table
+
+Tests if the specified table doesn't exist.
+
+    hasnt_table($schema, $table, $description);
+    hasnt_table($table, $description);
+    hasnt_table($table);
+
+=cut
+
+sub hasnt_table {
+    my @args = @_;
+    my ($table, $schema) = @args > 2 ? @args [1,0] : $args[0];
+    my $description = (@args > 1)
+        ? pop(@args)
+        : "should not have table ${table} " . test_connection_context();
+    my $ok;
+    eval {
+        $ok = ! $dbunit->has_table($schema ? ($schema, $table) : ($table));
+    };
+    my $explanation = "";
+    $explanation .= "\n" . $@ if $@;
+    $Tester->ok($ok, $description);
+    $Tester->diag($explanation) unless $ok;
+    $ok;
+}
+
+
+=item has_view
+
+Tests if the specified view exists.
+
+    has_view($schema, $view, $description);
+    has_view($view, $description);
+    has_view($view);
+
+=cut
+
+sub has_view {
+    my @args = @_;
+    my ($view, $schema) = @args > 2 ? @args [1,0] : $args[0];
+    my $description = (@args > 1)
+        ? pop(@args)
+        : "should have view ${view} " . test_connection_context();
+    my $ok;
+    eval {
+        $ok = $dbunit->has_view($schema ? ($schema, $view) : ($view));
+    };
+    my $explanation = "";
+    $explanation .= "\n" . $@ if $@;
+    $Tester->ok($ok, $description);
+    $Tester->diag($explanation) unless $ok;
+    $ok;
+}
+
+
+=item hasnt_view
+
+Tests if the specified view exists.
+
+    hasnt_view($schema, $view, $description);
+    hasnt_view($view, $description);
+    hasnt_view($view);
+
+=cut
+
+sub hasnt_view {
+    my @args = @_;
+    my ($view, $schema) = @args > 2 ? @args [1,0] : $args[0];
+    my $description = (@args > 1)
+        ? pop(@args)
+        : "should have view ${view} " . test_connection_context();
+    my $ok;
+    eval {
+        $ok = ! $dbunit->has_view($schema ? ($schema, $view) : ($view));
+    };
+    my $explanation = "";
+    $explanation .= "\n" . $@ if $@;
+    $Tester->ok($ok, $description);
+    $Tester->diag($explanation) unless $ok;
+    $ok;
+}
+
+
+=item has_column
+
+Tests if the specified column exists in the given table.
+
+    has_column($schema, $table, $column, $description);
+    has_column($table, $column, $description);
+    has_column($table, $column);
+
+=cut
+
+sub has_column {
+    my @args = @_;
+    my ($table, $column, $description, $schema) = @args == 4 ? @args [1,2,3,0] : @args;
+    $description ||=  "should have column ${column} on table ${table} " . test_connection_context();
+    my $ok;
+    eval {
+        $ok = $dbunit->has_column($schema ? ($schema, $table, $column) : ($table, $column));
+    };
+    my $explanation = "";
+    $explanation .= "\n" . $@ if $@;
+    $Tester->ok($ok, $description);
+    $Tester->diag($explanation) unless $ok;
+    $ok;
+
+}
+
+
+=item has_columns
+
+Tests if all specified columns exist for given table.
+
+    my $columms = ['id', 'name']
+    
+    has_columns($schema, $table, $columms);
+    has_columns($schema, $table, $columms, $description);
+    has_columns($table, $columms);
+    has_columns($table, $columms, $description);
+
+=cut
+
+sub has_columns {
+    my @args = @_;
+    my $description = ((@args == 4) || (@args == 3 && ref($args[-2])))
+        ? pop @args
+        : 'should have columns';
+    my $ok;
+    eval {
+        $ok = $dbunit->has_columns(@args);
+    };
+    my $explanation = $ok ? '' : $dbunit->failed_test_info;
+    $explanation .= "\n" . $@ if $@;
+    $Tester->ok($ok, $description);
+    $Tester->diag($explanation) unless $ok;
+    $ok;
+}
+
+
+=item hasnt_column
+
+Tests if the specified column doesn't exist in the given table.
+
+    hasnt_column($schema, $table, $column, $description);
+    hasnt_column($table, $column, $description);
+    hasnt_column($table, $column);
+
+=cut
+
+sub hasnt_column {
+    my @args = @_;
+    my ($table, $column, $description, $schema) = @args == 4 ? @args [1,2,3,0] : @args;
+    $description ||=  "should not have column ${column} on ${table} table " . test_connection_context();
+    my $ok;
+    eval {
+        $ok = ! $dbunit->has_column($schema ? ($schema, $table, $column) : ($table, $column));
+    };
+    my $explanation = "";
+    $explanation .= "\n" . $@ if $@;
+    $Tester->ok($ok, $description);
+    $Tester->diag($explanation) unless $ok;
+    $ok;
+}
+
+
+
+=item column_is_null
+
+Tests if the specified column is nullable
+
+    column_is_null($schema, $table, $columm, $description);
+    column_is_null($table, $columm, $description);
+    column_is_null($table, $columm);
+
+=cut
+
+sub column_is_null {
+    my @args = @_;
+    my ($table, $column, $description, $schema) = @args == 4 ? @args [1,2,3,0] : @args;
+    $description ||=  "should have column ${column} nullable" . test_connection_context();
+    my $ok;
+    eval {
+        $ok = $dbunit->column_is_null($schema ? ($schema, $table, $column) : ($table, $column));
+    };
+    my $explanation = "";
+    $explanation .= "\n" . $@ if $@;
+    $Tester->ok($ok, $description);
+    $Tester->diag($explanation) unless $ok;
+    $ok;
+}
+
+
+=item column_is_not_null
+
+Tests if the specified column is not nullable
+
+    column_is_not_null($schema, $table, $columm, $description);
+    column_is_not_null($table, $columm, $description);
+    column_is_not_null($table, $columm);
+
+=cut
+
+sub column_is_not_null {
+    my @args = @_;
+    my ($table, $column, $description, $schema) = @args == 4 ? @args [1,2,3,0] : @args;
+    $description ||=  "should not have column ${column} nullable" . test_connection_context();
+    my $ok;
+    eval {
+        $ok = $dbunit->column_is_not_null($schema ? ($schema, $table, $column) : ($table, $column));
+    };
+    my $explanation = "";
+    $explanation .= "\n" . $@ if $@;
+    $Tester->ok($ok, $description);
+    $Tester->diag($explanation) unless $ok;
+    $ok;
+}
+
+
+=item column_type_is
+
+Tests if the specified column's type for given table matches underlying column type definition.
+
+    column_type_is($schema, $table, $columm, $type);
+    column_type_is($schema, $table, $columm, $type, $description);
+    column_type_is($table, $columm, $type);
+
+=cut
+
+sub column_type_is {
+    my @args = @_;
+    my $description = @args == 5 ? pop @args : 'should validate colunmm type';
+    my $ok;
+    eval {
+        $ok = $dbunit->column_type_is(@args);
+    };
+    my $explanation = $ok ? '' : $dbunit->failed_test_info;
+    $explanation .= "\n" . $@ if $@;
+    $Tester->ok($ok, $description);
+    $Tester->diag($explanation) unless $ok;
+    $ok;
+}
+
+=item column_default_is
+
+Tests the specified default value matches database column definition.
+
+    column_default_is_ok($schema, $table, $columm, $default);
+    column_default_is_ok($schema, $table, $columm, $default, $description);
+    column_default_is_ok($table, $columm, $default);
+
+=cut
+
+sub column_default_is {
+    my @args = @_;
+    my $description = @args == 5 ? pop @args : 'should check column default value';
+    my $ok;
+    eval {
+        $ok = $dbunit->column_default_is(@args);
+    };
+    my $explanation = $ok ? '' : $dbunit->failed_test_info;
+    $explanation .= "\n" . $@ if $@;
+    $Tester->ok($ok, $description);
+    $Tester->diag($explanation) unless $ok;
+    $ok;
+}
+
+
+=item column_is_unique
+
+    column_is_unique($table, $column);
+    column_is_unique($schema, $table, $column);
+    column_is_unique($schema, $table, $column, $description);
+
+=cut
+
+sub column_is_unique {
+    my @args = @_;
+    my $description = @args == 4 ? pop @args : 'should column be unique';
+    my $ok;
+    eval {
+        $ok = $dbunit->column_is_unique(@args);
+    };
+    my $explanation = '';
+    $explanation .= "\n" . $@ if $@;
+    $Tester->ok($ok, $description);
+    $Tester->diag($explanation) unless $ok;
+    $ok;
+}
+
+
+=item has_pk
+
+Tests existence of the primary key for given table with optionally 
+specified columns that should be part of the primary key.
+
+    has_pk($table);
+    has_pk($schema, $table);
+    has_pk($table, $column_or_columns);
+    has_pk($schema, $table, $column_or_columns);
+
+
+    has_pk($schema, $table, $description);
+    has_pk($table, $column_or_columns, $description);
+    has_pk($schema, $table, $column_or_columns, $description);
+
+=cut
+
+sub has_pk {
+    my @args = @_;
+    my $description = @args == 4 ? pop @args : 'should have pk';
+    
+    my $ok;
+    eval {
+        $description = ($args[-1] =~ /\s/) ?  pop @args : $description;
+        $ok = $dbunit->has_pk(@args);
+    };
+    
+    my $explanation = $ok ? '' : $dbunit->failed_test_info;
+    $explanation .= "\n" . $@ if $@;
+    $Tester->ok($ok, $description);
+    $Tester->diag($explanation) unless $ok;
+    $ok;
+}
+
+
+=item has_fk
+
+Tests existence of the foreign key for given table and reference table
+with the specified columns.
+
+    has_fk($schema, $table, $columns, $referenced_schema, $referenced_table);
+    has_fk($table, $columns, $referenced_table);
+    has_fk($schema, $table, $columns, $referenced_schema, $referenced_table, $description);
+    has_fk($table, $columns, $referenced_table, $description);
+
+=cut
+
+sub has_fk {
+    my @args = @_;
+    my $description = (@args == 6) ? pop @args : 'should have fk';
+    my $ok;
+    eval {
+        $description = ($args[-1] =~ /\s/) ?  pop @args : $description;
+        $ok = $dbunit->has_fk(@args);
+    };
+    
+    my $explanation = $ok ? '' : $dbunit->failed_test_info;
+    $explanation .= "\n" . $@ if $@;
+    $Tester->ok($ok, $description);
+    $Tester->diag($explanation) unless $ok;
+    $ok;
+}
+
+
+=item has_index
+
+Tests index existenece for given table with the optionally specified columns.
+
+    has_index($table, $index, $column_or_expressions);
+    has_index($schema, $table, $index, $column_or_expressions);
+    has_index($table, $index);
+    has_index($schema, $table, $index);
+    
+    has_index($table, $index, $column_or_expressions, $desciption);
+    has_index($schema, $table, $index, $column_or_expressions, $desciption);
+    has_index($table, $index, $desciption);
+    has_index($schema, $table, $index, $desciption);
+
+=cut
+
+sub has_index {
+    my @args = @_;
+    my $description = (@args == 5) ? pop @args : undef;
+    my $ok;
+    eval {
+        $ok = $dbunit->has_index(@args);
+        if(! $ok && ! $description && ! ref($args[-1])) {
+            $description = pop @args;
+            $ok = $dbunit->has_index(@args);
+        }
+    };
+    $description ||= 'should have index';
+    my $explanation = $ok ? '' : $dbunit->failed_test_info;
+    $explanation .= "\n" . $@ if $@;
+    $Tester->ok($ok, $description);
+    $Tester->diag($explanation) unless $ok;
+    $ok;
+}
+
+
+=item index_is_unique
+
+    index_is_unique($schema, $table, $index);
+    index_is_unique($table, $index);
+    index_is_unique($schema, $table, $index, $description);
+    index_is_unique($table, $index, $description);
+
+=cut
+
+sub index_is_unique {
+    my @args = @_;
+    my $description = (@args == 4) ? pop @args : undef;
+    my $ok;
+    eval {
+        $ok = $dbunit->index_is_unique(@args);
+        if(! $ok && ! $description && @args > 2 && ($args[-1] =~ /\s/)) {
+            $description = pop @args;
+            $ok = $dbunit->index_is_unique(@args);
+        }
+    };
+    $description ||= 'should have unique index ';
+    my $explanation = $ok ? '' : $dbunit->failed_test_info;
+    $explanation .= "\n" . $@ if $@;
+    $Tester->ok($ok, $description);
+    $Tester->diag($explanation) unless $ok;
+    $ok;
+}
+
+
+=item index_is_primary
+
+    index_is_primary($schema, $table, $index);
+    index_is_primary($table, $index);
+    index_is_primary($schema, $table, $index, $description);
+    index_is_primary$table, $index, $description);
+
+=cut
+
+sub index_is_primary {
+    my @args = @_;
+    my $description = (@args == 4) ? pop @args : undef;
+    my $ok;
+    eval {
+        $ok = $dbunit->index_is_primary(@args);
+        if(! $ok && ! $description && @args > 2 && ($args[-1] =~ /\s/)) {
+            $description = pop @args;
+            $ok = $dbunit->index_is_primary(@args);
+        }
+
+    };
+    $description ||= 'should have primary_key index';
+    my $explanation = $ok ? '' : $dbunit->failed_test_info;
+    $explanation .= "\n" . $@ if $@;
+    $Tester->ok($ok, $description);
+    $Tester->diag($explanation) unless $ok;
+    $ok;
+}
+
+
+=item index_is_type
+
+Tests if the specified index's type matches defined index type
+
+    index_is_type($schema, $table, $index, $type);
+    index_is_type($table, $index, $type);
+    index_is_type($schema, $table, $index, $type, $description);
+    index_is_type($table, $index, $type, $description);
+
+    type can be:
+    - btree, bitmap, etc. - check you database vendor documentation.
+
+=cut
+
+sub index_is_type {
+    my @args = @_;
+    my $description = (@args == 5) ? pop @args : undef;
+    my $ok;
+    eval {
+        $description = pop @args if (! $description && ($args[-1] =~ /\s/));
+        $ok = $dbunit->index_is_type(@args);
+    };
+    $description ||= 'should validate index type';
+    my $explanation = $ok ? '' : $dbunit->failed_test_info;
+    $explanation .= "\n" . $@ if $@;
+    $Tester->ok($ok, $description);
+    $Tester->diag($explanation) unless $ok;
+    $ok;
+}
+
+
+=item has_trigger
+
+Tests if the specified trigger exists for the given table.
+
+    has_trigger($schema, $table, $trigger);
+    has_trigger($table, $trigger);
+    has_trigger($schema, $table, $trigger, $description);
+    has_trigger($table, $trigger, $description);
+
+=cut
+
+sub has_trigger {
+    my @args = @_;
+    my $description = (@args == 4) ? pop @args : undef;
+    my $ok;
+    eval {
+        $description = pop @args if (! $description && ($args[-1] =~ /\s/));
+        $ok = $dbunit->has_trigger(@args);
+    };
+    $description ||= 'should have trigger';
+    my $explanation = $ok ? '' : $dbunit->failed_test_info;
+    $explanation .= "\n" . $@ if $@;
+    $Tester->ok($ok, $description);
+    $Tester->diag($explanation) unless $ok;
+    $ok;
+}
+
+
+
+=item trigger_is
+
+Tests if the specified trigger body matches the trigger body (or funtion in case of postgresql)
+
+    trigger_is($schema, $table, $trigger, $trigger_body);
+    trigger_is($table, $trigger, $trigger_body);
+    trigger_is($schema, $table, $trigger, $trigger_body, $description);
+    trigger_is($table, $trigger, $trigger_body, $description);
+
+=cut
+
+sub trigger_is {
+    my @args = @_;
+    my $description = (@args == 5) ? pop @args : undef;
+    my $ok;
+    eval {
+        $ok = $dbunit->trigger_is(@args);
+        if (! $ok && ! $description && (@args == 4)) {
+            $description = pop @args;
+            $ok = $dbunit->trigger_is(@args);
+        }
+    };
+    $description ||= 'should match trigger body';
+    my $explanation = $ok ? '' : $dbunit->failed_test_info;
+    $explanation .= "\n" . $@ if $@;
+    $Tester->ok($ok, $description);
+    $Tester->diag($explanation) unless $ok;
+    $ok;
+}
+
+
+=item has_routine
+
+Tests if the specified routine exists in database and optionally has expected arguments type.
+
+    my $args = ['type1', 'type2', 'return_type'];
+    or
+    my $args = ['IN type1', 'OUT type2', 'type3'];
+    or
+    my $args = ['name1 type1', 'name2 type2', 'return type3'];
+    or
+    my $args = ['IN name1 type1', 'INOUT name2 type2', 'return type3'];
+
+    has_routine($schema, $function);
+    has_routine($function);
+    has_routine($schema, $function, $args);
+    has_routine($function, $args);
+
+    has_routine($schema, $function, $description);
+    has_routine($schema, $function, $args, $description);
+    has_routine($function, $args, $description);
+    has_routine($function, $description);
+
+=cut
+
+sub has_routine {
+    my @args = @_;
+    my $description = (@args == 4) ? pop @args : undef;
+    my $ok;
+    eval {
+        $ok = $dbunit->has_routine(@args);
+        if (! $ok && ! $description && ! ref($args[-1])) {
+            $description = pop @args;
+            $ok = $dbunit->has_routine(@args);
+        }
+    };
+    $description ||= 'should have routine';
+    my $explanation = $ok ? '' : $dbunit->failed_test_info;
+    $explanation .= "\n" . $@ if $@;
+    $Tester->ok($ok, $description);
+    $Tester->diag($explanation) unless $ok;
+    $ok;
+    
+}
+
 =item _initialise_connection
 
-Initialises default test connection
+Initializes default test connection
 
 =cut
 
