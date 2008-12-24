@@ -2,12 +2,12 @@ use strict;
 use warnings;
 
 use DBIx::Connection;
-use Test::More tests => 87;
+use Test::More tests => 93;
 use Test::DBUnit connection_name => 'test';
 
 
 SKIP: {
-    skip('missing env varaibles DB_TEST_CONNECTION, DB_TEST_USERNAME DB_TEST_PASSWORD', 87)
+    skip('missing env varaibles DB_TEST_CONNECTION, DB_TEST_USERNAME DB_TEST_PASSWORD', 93)
         unless $ENV{DB_TEST_CONNECTION};
      my $connection = DBIx::Connection->new(
         name     => 'test',
@@ -62,9 +62,14 @@ SKIP: {
             )
         }
         
-        
+        my $schema = ($dbms_name eq 'PostgreSQL' ? 'public' : $ENV{DB_TEST_USERNAME});        
         SKIP: {
             skip('Tests are not prepared for ' . $dbms_name , 3) unless ($dbms_name  =~ /oracle|mysql|postgresql/i);
+            
+            if (lc($dbms_name) eq 'mysql') {
+                skip('Tests are not prepared for ' . $dbms_name , 6);
+            }
+            
             execute_ok(":var := 360", {var => 360}, undef, 'should have expected plsql data');
             if ($dbms_name eq 'MySQL') {
                 throws_ok(":var := fake_fumction('1')", 'fake_fumction does not exis', 'should catch expection');
@@ -74,16 +79,23 @@ SKIP: {
             } elsif ($dbms_name eq 'Oracle') {
                 throws_ok(":var := fake_fumction('1')", 'fake_fumction', 'should catch expection');
                 throws_ok(":var := fake_fumction('1')", 6550, 'fake_fumction', 'should catch expection');
+                has_sequence('emp_seq');
+                has_sequence('emp_seq', 'should have sequence !');
+                has_sequence($schema, 'emp_seq', 'should have sequence !');
                 
                 
             } elsif ($dbms_name eq 'PostgreSQL') {
                 throws_ok(":var := fake_fumction('1')", 'fake_fumction', 'should catch expection');
                 throws_ok(":var := fake_fumction('1')", 7, 'fake_fumction', 'should catch expection');
                 
+                has_sequence('emp_seq');
+                has_sequence('emp_seq', 'should have sequence !');
+                has_sequence($schema, 'emp_seq', 'should have sequence !');
+                
             }
         }
 
-        my $schema = ($dbms_name eq 'PostgreSQL' ? 'public' : $ENV{DB_TEST_USERNAME});
+
         has_table('emp');
         has_table($schema, 'emp', 'should have table');
         has_table('emp', 'should have emp');
@@ -195,6 +207,11 @@ SKIP: {
         has_routine('test1', 'should have procedure test1 !');
         has_routine($schema, 'test1');
         has_routine($schema, 'test1', 'should have procedure test1 !');
+
+        hasnt_sequence('emp_seq1');
+        hasnt_sequence('emp_seq1', 'should have sequence !');
+        hasnt_sequence($schema, 'emp_seq1', 'should have sequence !');
+        
         
         set_insert_load_strategy;
         SKIP: {

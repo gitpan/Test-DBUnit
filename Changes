@@ -1,5 +1,9 @@
 Revision history for Perl extension Test::DBUnit.
 
+
+0.17 Wen Dec 24 2008
+    - added has_sequence mwthod, extended tests.
+
 0.16 Mon Dec 22 2008
     - added plsql / excpetion test methods:
 	execute_ok

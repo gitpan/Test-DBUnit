@@ -11,7 +11,7 @@ use Carp 'confess';
 use Sub::Uplevel qw(uplevel);
 use Test::Builder;
 
-$VERSION = '0.16';
+$VERSION = '0.17';
 
 @EXPORT = qw(
     expected_dataset_ok dataset_ok expected_xml_dataset_ok xml_dataset_ok
@@ -19,7 +19,7 @@ $VERSION = '0.16';
     set_insert_load_strategy test_connection set_test_connection add_test_connection test_dbh
     execute_ok throws_ok
     has_table hasnt_table
-    has_view hasnt_view
+    has_view hasnt_view has_sequence hasnt_sequence
     has_column hasnt_column column_is_null column_is_not_null has_columns column_type_is
     column_default_is column_is_unique
     has_pk has_fk
@@ -29,7 +29,7 @@ $VERSION = '0.16';
 
 =head1 NAME
 
-Test::DBUnit - Database test framework.
+Test::DBUnit - Database testing framework.
 
 =head1 SYNOPSIS
 
@@ -84,10 +84,35 @@ Test::DBUnit - Database test framework.
         table1 => [column1 => 'z', column2 => 'y'],
     )
 
+    has_table('table1');
+    has_columns([
+    'column1', 'column2'	
+    ]);
+
+    
+    column_is_null('table1', 'column1');
+    column_is_not_null('table1', 'columne2');
+    column_type_is('table1', 'column1', 'varchar(20)');
+    has_pk('table1', 'id');
+    has_fk('table2', 'tab1_id', 'table1');
+    has_index('table1', 'tab1_idx1', 'column1');
+    index_is_unique('table1', tab_idx1');
+    index_is_primary('tabl1', 'tab_idx_pk');
+    index_is_type('tabl1', 'tab_idx_pk', 'btree');
+
+    has_routine('approve_document', ['IN varchar', 'RETURN record']);
+
 
 =head1 DESCRIPTION
 
-Database test framework to verify that your database data match expected set of values.
+Database testing framework that covers both black-box testing and clear-box(white-box) testing.
+
+Black-box testing allows you to verify that your database data match expected set of values. 
+This dataset comes either from tables, views, stored procedure/functions.
+
+Clear-box testing focuses on existience database schema elements like tables, views, columns, indexes, triggers,
+procedures, functions, constraints. Additionally  you can test paticualr characteristic of those object like
+type, default value,  is unique, exceptions etc .
 
 =head2 Managing test data
 
@@ -100,9 +125,8 @@ Database tests should giving you complete and fine grained control over the test
 
 =head2 Loading test data sets
 
-Before you want to test your business logic it is essential to have repeatable snapshot of your
-tables you want to test, so this module allows you populate/synchronize your database with
-the passed in data structure or with the xml content.
+Before you want to test your business logic it is essential to have repeatable snapshot of the data to be tested,
+so this module allows you fill in/synchronize your database with the testing data.
 
     dataset_ok(
         emp => [ename => "john", deptno => "10", job => "project manager"],
@@ -161,9 +185,8 @@ You may want to check the result of a update/insert/delete method or a stored pr
 
 =head3 Dynamic tests
 
-You may want to check not just a particular value but range of values or perform complex condition checking against
-database column's value, so then you can use callback. It takes database column's value as parameter and should return
-true to pass the test, false otherwise.
+You may want to check not just a particular value but range of values or perform complex condition against
+database column's value, so that you can use callback. 
 
     expected_dataset_ok(
         emp   => [empno => "1", ename => "Scott", deptno => "10", job => "project manager"],
@@ -469,7 +492,9 @@ hasnt_column
 has_columns
 column_is_null
 column_is_not_null
-column_type_is_ok
+column_type_is
+has_sequence
+hasnt_sequence
 has_pk
 has_fk
 has_index
@@ -1028,6 +1053,62 @@ sub has_column {
     $Tester->diag($explanation) unless $ok;
     $ok;
 
+}
+
+
+=item has_sequence
+
+Tests if the specified table exists.
+
+    has_sequence($schema, $sequence, $description);
+    has_sequence($sequence, $description);
+    has_sequence($sequence);
+
+=cut
+
+sub has_sequence {
+    my @args = @_;
+    my ($sequence, $schema) = @args > 2 ? @args [1,0] : $args[0];
+    my $description = (@args > 1)
+        ? pop(@args)
+        : "should have ${sequence} sequence" . test_connection_context();
+    my $ok;
+    eval {
+        $ok = $dbunit->has_sequence($schema ? ($schema, $sequence) : ($sequence));
+    };
+    my $explanation = "";
+    $explanation .= "\n" . $@ if $@;
+    $Tester->ok($ok, $description);
+    $Tester->diag($explanation) unless $ok;
+    $ok;
+}
+
+
+=item hasnt_sequence
+
+Tests if the specified table doesn't exist.
+
+    hasnt_sequence($schema, $sequence, $description);
+    hasnt_sequence($sequence, $description);
+    hasnt_sequence($sequence);
+
+=cut
+
+sub hasnt_sequence {
+    my @args = @_;
+    my ($sequence, $schema) = @args > 2 ? @args [1,0] : $args[0];
+    my $description = (@args > 1)
+        ? pop(@args)
+        : "should not have ${sequence} sequence" . test_connection_context();
+    my $ok;
+    eval {
+        $ok = ! $dbunit->has_sequence($schema ? ($schema, $sequence) : ($sequence));
+    };
+    my $explanation = "";
+    $explanation .= "\n" . $@ if $@;
+    $Tester->ok($ok, $description);
+    $Tester->diag($explanation) unless $ok;
+    $ok;
 }
 
 

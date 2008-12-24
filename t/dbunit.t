@@ -1,7 +1,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 97;
+use Test::More tests => 99;
 
 my $class;
 
@@ -117,7 +117,7 @@ VALUES(20, \'IT\', \'Katowice;\')',
 
 SKIP: {
     
-    skip('missing env varaibles DB_TEST_CONNECTION, DB_TEST_USERNAME DB_TEST_PASSWORD', 87)
+    skip('missing env varaibles DB_TEST_CONNECTION, DB_TEST_USERNAME DB_TEST_PASSWORD', 89)
 
       unless $ENV{DB_TEST_CONNECTION};
     use DBIx::Connection;
@@ -479,7 +479,7 @@ SKIP: {
         ok($dbunit->has_routine('test1'), 'should have function');
         ok(! $dbunit->has_routine('test1', ['OUT int', 'INOUT varchar', 'IN varchar', 'record']), 'should not have function');
         ok($dbunit->failed_test_info, 'should have failure info');
-                
+        ok(! $dbunit->has_sequence('emp_seq1'), 'should not have sequence');                
         
         SKIP: {
             if($connection->dbms_name eq 'PostgreSQL') {
@@ -491,13 +491,14 @@ SKIP: {
                 ok($dbunit->has_index('emp_project_details', 'emp_project_details_func'), 'should have index  emp_project_details_func');
                 ok($dbunit->trigger_is('emp_project_details','aa_emp_project_details', 'emp_project_details'), 'should match trigger body - function');
                 ok($dbunit->has_routine('test1', ['OUT varchar', 'INOUT varchar', 'IN varchar', 'record']), 'should have function');
+                ok($dbunit->has_sequence('emp_seq'), 'should have sequence');
             } else {
                 if($connection->dbms_name eq 'MySQL') {
                     ok($dbunit->has_routine('test1', ['OUT varchar(100)', 'INOUT varchar(100)', 'IN varchar(100)']), 'should have routine');
                 } else {
                     ok($dbunit->has_routine('test1', ['OUT varchar2', 'IN OUT varchar2', 'IN varchar2']), 'should have routine');
                 }
-                skip('not supported', 7);
+                skip('not supported', 8);
             }
         }
     }

@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use vars qw(@EXPORT_OK %EXPORT_TAGS $VERSION);
 
-$VERSION = '0.10';
+$VERSION = '0.11';
 
 use Abstract::Meta::Class ':all';
 use base 'Exporter';
@@ -20,7 +20,7 @@ use constant REFRESH_LOAD_STRATEGY => 1;
 
 =head1 NAME
 
-DBUnit - Database test API
+DBUnit - Database testing API
 
 =head1 SYNOPSIS
 
@@ -880,6 +880,24 @@ sub has_trigger {
 }
 
 
+
+
+=item has_sequence
+
+Returns true if the specified seuqnce exists.
+
+=cut
+
+sub has_sequence {
+    my ($self, @args) = @_;
+    my ($sequence, $schema) = (@args == 1) ? $args[0] : reverse @args;
+    my $connection = DBIx::Connection->connection($self->connection_name);
+    my $result = $connection->has_sequence($sequence, $schema);
+    $connection->close();
+    return $result;
+}
+
+
 =item trigger_is
 
 Returns true if the specified trigger body matches the trigger body (or funtion in case of postgresql)
@@ -901,7 +919,7 @@ sub trigger_is {
     unless ($trigger_info) {
         $self->_set_failed_test_info(sprintf("trigger %s doesn't exist", $trigger));
     }
-
+    $connection->close;
     if (lc($trigger_info->{table_name}) ne lc($table)) {
         $self->_set_failed_test_info(sprintf("trigger %s doesn't exist for table %s, \ntrigger is defined on %s table",
             $trigger,
@@ -959,7 +977,7 @@ sub has_routine {
             return undef
         }
     }
-
+    $connection->close;
     my $result = 1;
     if($args) {
         $args =[$args] unless ref($args) eq 'ARRAY';

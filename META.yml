@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:                Test-DBUnit
-version:             0.16
+version:             0.17
 author:
   - 'Adrian Witas <adrian@webapp.strefa.pl>'
 abstract: Database test framework
