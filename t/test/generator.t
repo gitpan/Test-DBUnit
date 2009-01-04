@@ -2,7 +2,7 @@ use strict;
 use warnings;
 
 use DBIx::Connection;
-use Test::More tests => 3;
+use Test::More tests => 4;
 
 my $class;
 
@@ -19,7 +19,7 @@ sub dataset_ok {
 
 
 SKIP: {
-    skip('missing env varaibles DB_TEST_CONNECTION, DB_TEST_USERNAME DB_TEST_PASSWORD', 2)
+    skip('missing env varaibles DB_TEST_CONNECTION, DB_TEST_USERNAME DB_TEST_PASSWORD', 3)
         unless $ENV{DB_TEST_CONNECTION};
      my $connection = DBIx::Connection->new(
         name     => 'test',
@@ -61,8 +61,8 @@ SKIP: {
         
     );
 
-    like($gen->xml, qr{col1="1"}, "should generate xml dataset");
-    my $perl = $gen->perl;
+    like($gen->xml_dataset, qr{col1="1"}, "should generate xml dataset");
+    my $perl = $gen->dataset;
     my @data;
     @data = eval("&${perl}");
     is_deeply(\@data, 
@@ -71,6 +71,16 @@ SKIP: {
     tag2 => ['col1','a','col2','b'],
     tag2 => ['col1','b','col2','abc<>ew']] ,'should generate perl dataset');
 
+
+    ok($gen->schema_validator(
+        has_table        => 1,
+        has_columns      => 1,
+        has_pk           => 1,
+        has_fk           => 1,
+        has_index        => 1,
+    ), 'should generate schema validation');
+    
+    
 }
 
 

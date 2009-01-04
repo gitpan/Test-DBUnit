@@ -1,5 +1,7 @@
 Revision history for Perl extension Test::DBUnit.
 
+0.18 Mon Jan 04 2008
+    - added Test::DBUnit::Generator->schema_validator method
 
 0.17 Wen Dec 24 2008
     - added has_sequence mwthod, extended tests.

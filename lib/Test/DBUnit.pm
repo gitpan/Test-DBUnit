@@ -11,7 +11,7 @@ use Carp 'confess';
 use Sub::Uplevel qw(uplevel);
 use Test::Builder;
 
-$VERSION = '0.17';
+$VERSION = '0.18';
 
 @EXPORT = qw(
     expected_dataset_ok dataset_ok expected_xml_dataset_ok xml_dataset_ok
@@ -85,8 +85,8 @@ Test::DBUnit - Database testing framework.
     )
 
     has_table('table1');
-    has_columns([
-    'column1', 'column2'	
+    has_columns('table1', [
+    'column1', 'column2'
     ]);
 
     
@@ -1348,7 +1348,6 @@ sub has_fk {
         $description = ($args[-1] =~ /\s/) ?  pop @args : $description;
         $ok = $dbunit->has_fk(@args);
     };
-    
     my $explanation = $ok ? '' : $dbunit->failed_test_info;
     $explanation .= "\n" . $@ if $@;
     $Tester->ok($ok, $description);

@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use vars qw(@EXPORT_OK %EXPORT_TAGS $VERSION);
 
-$VERSION = '0.11';
+$VERSION = '0.12';
 
 use Abstract::Meta::Class ':all';
 use base 'Exporter';
@@ -584,7 +584,8 @@ sub column_default_is {
         $self->_set_failed_test_info(sprintf("column %s doesn't exists in table %s", $column, $table));
         return undef;
     }
-    unless($column_def->{default} =~ /$default/) {
+    my $quted_default = quotemeta($default);
+    unless($column_def->{default} =~ /$quted_default/) {
         $self->_set_failed_test_info(sprintf("got default value: %s\nexpected: %s", $column_def->{default}, $default));
         return undef;
     }
@@ -689,10 +690,16 @@ sub has_fk {
         ? @args : @args[1, 2, 4, 0, 3];
     my $connection = DBIx::Connection->connection($self->connection_name);
     $self->_set_failed_test_info("");
-    my @foreign_key_columns = $connection->foreign_key_columns($table, $referenced_table);
+    my $foreign_key_info = $connection->foreign_key_info($table, $referenced_table) || [];
     $connection->close;
-    my $result = !! @foreign_key_columns;
-    if($result) {
+    my %fk;
+    for my $row (@$foreign_key_info) {
+        my $id = $row->[11] || $row->[2];
+        push @{$fk{$id}}, $row;
+    }
+    my $result = !! scalar %fk;
+    for my $fk (values %fk) {
+        my @foreign_key_columns = map {$_->[7]} @$fk;
         $columns = [$columns] unless ref($columns);
         for my $i (0 .. $#foreign_key_columns) {
             if(lc $columns->[$i] ne $foreign_key_columns[$i]) {
@@ -703,16 +710,22 @@ sub has_fk {
             }
         }
         unless($result) {
-            $self->_set_failed_test_info(sprintf("%s->%s foreign key columns don't match got: %s\nexpected: %s ",
+            $self->_set_failed_test_info(sprintf("%s -> %s foreign key columns don't match got: %s\nexpected: %s ",
                     $table, $referenced_table,
                     join(", ",@$columns),
                     join(", ", @foreign_key_columns)
                 ));
-            }
-    } else {
+        }
+        
+        if ($result) {
+            $self->_set_failed_test_info('');
+            last;
+        }
+        
+    }
+    unless ($result) {
         $self->_set_failed_test_info(sprintf("foreign key doesn't exist for tables %s AND %s", $table, $referenced_table));
     }
-    
     return $result;
 }
 
@@ -1181,12 +1194,13 @@ Removes existing schema
 sub drop_objects {
     my ($self, @objects) = @_;
     my $connection = DBIx::Connection->connection($self->connection_name);
+    my $dbms_name = lc($connection->dbms_name);
     for my $object (@objects) {
         next if ($object =~ /^\d+$/);
         
         if($object =~ m/table\s+`*(\w+)`*/i) {
             my $table = $1;
-            $connection->do("DROP $object") 
+            $connection->do("DROP $object " . ($dbms_name eq "postgresql" ? 'CASCADE' : '')) 
                 if $connection->has_table($table);
         } elsif($object =~ m/view\s+`*(\w+)`*/i) {
             my $table = $1;
