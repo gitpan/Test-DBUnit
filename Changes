@@ -1,6 +1,9 @@
 Revision history for Perl extension Test::DBUnit.
 
-0.18 Mon Jan 04 2008
+0.19 Sun Jan 11 2009
+    - extended documentation
+
+0.18 Mon Jan 04 2009
     - added Test::DBUnit::Generator->schema_validator method
 
 0.17 Wen Dec 24 2008

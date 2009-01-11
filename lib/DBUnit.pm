@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use vars qw(@EXPORT_OK %EXPORT_TAGS $VERSION);
 
-$VERSION = '0.12';
+$VERSION = '0.13';
 
 use Abstract::Meta::Class ':all';
 use base 'Exporter';
@@ -310,7 +310,7 @@ sub execute {
 
 =head2 SCHEMA TEST METHODS
 
-    The following methods check for existence.of the particualr database
+    The following methods check for existence.of the particular database
     schema objects like table, column, index, triggers,
     function, procedures packages.
 
@@ -473,8 +473,8 @@ sub column_is_not_null {
 
 =item _check_type_family
 
-Checks data type familes, tests if the specified testes type belongs to the same group as db_type (or dbi type)
-There are currently the following synonyms for the familes
+Checks data type families, tests if the specified testes type belongs to the same group as db_type (or dbi type)
+There are currently the following synonyms for the families
 
     - 'TEXT', 'VARCHAR', 'CHARACTER VARYING', 'VARCHAR2'
     - 'BPCHAR', 'CHAR', 'CHARACTER'
@@ -508,7 +508,7 @@ sub _data_type_aliases {
 
 =item _match_data_type
 
-Returns undef if the specified data type matches undelying database type otherwise type name
+Returns undef if the specified data type matches underlying database type otherwise type name
 
 =cut
 
@@ -844,7 +844,7 @@ sub index_is_primary {
 
 Returns true if the specified index's type is the index type
 from underlying database, otherwise undef.
-Check additionly failed_test_info method.
+Check additionally failed_test_info method.
 
     $dbunit->index_is_type($schema, $table, $index, $type);
     $dbunit->index_is_type($table, $index, $type);
@@ -897,7 +897,7 @@ sub has_trigger {
 
 =item has_sequence
 
-Returns true if the specified seuqnce exists.
+Returns true if the specified sequence exists.
 
 =cut
 
@@ -913,8 +913,8 @@ sub has_sequence {
 
 =item trigger_is
 
-Returns true if the specified trigger body matches the trigger body (or funtion in case of postgresql)
-for given table, otherwise undef check additionaly failed_test_info method.
+Returns true if the specified trigger body matches the trigger body (or function in case of postgresql)
+for given table, otherwise undef check additionally failed_test_info method.
 
 
     $dbunit->trigger_is($schema, $table, $trigger, $trigger_body);
@@ -970,7 +970,7 @@ Returns true if the specified routine exists and have matched prototype
     $dbunit->has_routine($function, $args);
 
 In case of testing function arguments, the last one is the function return type.
-Check additionaly failed_test_info method.
+Check additionally failed_test_info method.
 
 =cut
 
@@ -1014,7 +1014,7 @@ sub has_routine {
         }
 
         unless($result) {
-            $self->_set_failed_test_info(sprintf("function %s doesn't match the specified arguments %s\nexistsing prototyes: %s",
+            $self->_set_failed_test_info(sprintf("function %s doesn't match the specified arguments %s\nexistsing prototypes: %s",
                 $function,
                 join (', ',@$args),
                 join ("\n", map { $function .'(' . $_->{routine_arguments} .')'
@@ -1078,7 +1078,7 @@ sub failed_test_info {
 
 =item routine_is
 
-Returns true if the specified function mathes passed in body
+Returns true if the specified function matches passed in body
 
 
     $dbunit->has_routine($schema, $function, $args, $routine_body);

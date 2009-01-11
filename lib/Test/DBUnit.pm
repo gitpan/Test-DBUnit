@@ -11,7 +11,7 @@ use Carp 'confess';
 use Sub::Uplevel qw(uplevel);
 use Test::Builder;
 
-$VERSION = '0.18';
+$VERSION = '0.19';
 
 @EXPORT = qw(
     expected_dataset_ok dataset_ok expected_xml_dataset_ok xml_dataset_ok
@@ -110,8 +110,8 @@ Database testing framework that covers both black-box testing and clear-box(whit
 Black-box testing allows you to verify that your database data match expected set of values. 
 This dataset comes either from tables, views, stored procedure/functions.
 
-Clear-box testing focuses on existience database schema elements like tables, views, columns, indexes, triggers,
-procedures, functions, constraints. Additionally  you can test paticualr characteristic of those object like
+Clear-box testing focuses on existence database schema elements like tables, views, columns, indexes, triggers,
+procedures, functions, constraints. Additionally  you can test particular characteristic of those object like
 type, default value,  is unique, exceptions etc .
 
 =head2 Managing test data
@@ -142,6 +142,8 @@ so this module allows you fill in/synchronize your database with the testing dat
         <emp empno="2" ename="john"  deptno="10" job="engineer" />
         <bonus ename="scott" job="project manager" sal="20" />
     </dataset>
+
+You may automatically create testing dataset or expected dataset using L<Test::DBUnit::Generator> module.
 
 =head2 Getting connection to test database
 
@@ -470,6 +472,80 @@ In MySQL, binary LOBs are just table fields like any other types , so storing bl
             blob_content => {file => 'data/chart1.jpg', size_column => 'doc_size'}
         ]
     );
+
+
+=head2 Testing database stored procedures/functions
+
+You may need to test execution of database stored procedures/functions. This module
+allows you test both normal and exception execution path.
+
+
+    execute_ok($plsql, $expected_values);
+    throws_ok($sql, $errcode, $errmsg, $description);
+
+
+=head2 Testing database schema objects
+
+It can be useful to validate existence or characteristic of any schema objects including tables, columns,
+indexes, constraints, etc ....
+No once do the staging, life environments have discrepancy starting with missing indexes, constraints,
+ending at difference in the table structures. This may lead too many problems  including
+poor performance due to missing or wrong index type,
+execution errors caused by incorrect columns data type,
+logical errors by wrong or missing trigger/function.
+
+It's felt that validation of schema objects significantly mitigate the risk of having out of sync state.
+The following method allows you tests schema objects:
+ 
+
+=head3 Table validation
+
+Allows you testing existence/non-existence of the particular table.
+
+    has_table('table1');
+    hasnt_table('table1');
+
+
+=head3 Table's columns validation
+
+Focuses on testing existence/non existence column, additionally you may test column definition.
+
+    has_columns('table1', [
+        'column1', 'column2', 'columnN'
+    ]);
+
+    has_column('table1', 'column1');
+    hasnt_column('table1', 'column1');
+    column_is_null('table1', 'column1');
+    column_is_not_null('table1', 'columne2');
+    column_type_is('table1', 'column1', 'varchar(20)');
+
+
+=head3 Constraints validation
+
+Gives you options to validate primary, foreign keys.
+
+    has_pk('table1', 'id');
+    has_fk('table2', 'tab1_id', 'table1');
+
+=head3 Indexes validation.
+
+Allows you testing existence of the index, you  may also test index uniqueness, type.
+
+    has_index('table1', 'tab1_idx1', 'column1');
+    index_is_unique('table1', tab_idx1');
+    index_is_primary('tabl1', 'tab_idx_pk');
+    index_is_type('tabl1', 'tab_idx_pk', 'btree');
+
+
+=head3 Functions/procedures validation
+
+You may be interested in testing both existence of database functions/procedures
+with the specified interface.
+
+    has_routine('approve_document', ['IN varchar', 'RETURN record']);
+
+You may automatically create schema objects tests using L<Test::DBUnit::Generator> module.
 
 
 =head2 EXPORT
@@ -1358,7 +1434,7 @@ sub has_fk {
 
 =item has_index
 
-Tests index existenece for given table with the optionally specified columns.
+Tests index existence for given table with the optionally specified columns.
 
     has_index($table, $index, $column_or_expressions);
     has_index($schema, $table, $index, $column_or_expressions);
@@ -1513,7 +1589,7 @@ sub has_trigger {
 
 =item trigger_is
 
-Tests if the specified trigger body matches the trigger body (or funtion in case of postgresql)
+Tests if the specified trigger body matches the trigger body (or function in case of postgresql)
 
     trigger_is($schema, $table, $trigger, $trigger_body);
     trigger_is($table, $trigger, $trigger_body);
