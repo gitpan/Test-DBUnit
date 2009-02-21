@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use vars qw(@EXPORT_OK %EXPORT_TAGS $VERSION);
 
-$VERSION = '0.13';
+$VERSION = '0.15';
 
 use Abstract::Meta::Class ':all';
 use base 'Exporter';
@@ -1195,12 +1195,12 @@ sub drop_objects {
     my ($self, @objects) = @_;
     my $connection = DBIx::Connection->connection($self->connection_name);
     my $dbms_name = lc($connection->dbms_name);
+    my $cascade = ($dbms_name eq "postgresql" ? 'CASCADE' : '');
     for my $object (@objects) {
         next if ($object =~ /^\d+$/);
-        
         if($object =~ m/table\s+`*(\w+)`*/i) {
             my $table = $1;
-            $connection->do("DROP $object " . ($dbms_name eq "postgresql" ? 'CASCADE' : '')) 
+            $connection->do("DROP ${object} ${cascade}")
                 if $connection->has_table($table);
         } elsif($object =~ m/view\s+`*(\w+)`*/i) {
             my $table = $1;
@@ -1209,7 +1209,7 @@ sub drop_objects {
                 
         } elsif($object =~ m/sequence\s+`*(\w+)`*/i) {
             my $sequence = $1;
-            $connection->do("DROP $object")
+            $connection->do("DROP ${object} ${cascade}")
                 if $connection->has_sequence($sequence);
         } elsif(($object =~ m/(procedure)\s+`*(\w+)`*/i) || ($object =~ m/(function)\s+`*(\w+)`*/i)) {
             my ($type, $function) = ($1,$2);
@@ -1435,8 +1435,15 @@ sub expected_dataset_for_insert_load_strategy {
     my $tables_rows = $self->retrive_tables_data($connection, $tables);
     for (my $i = 0; $i < $#{$exp_dataset}; $i += 2) {
         my $table_name = $exp_dataset->[$i];
-        my %lob_values = $self->_extract_lob_values($exp_dataset->[$i + 1]);
-        my %values = $self->_extract_column_values($exp_dataset->[$i + 1]);
+        my $fields = $exp_dataset->[$i + 1];
+        if(ref($fields) eq 'HASH' && ! scalar(%$fields)) {
+            if(my $rows = $self->count_table_rows($table_name, $connection)) {
+               return  sprintf("table ${table_name} should not have rows, has %s row(s)", $rows);
+            }
+            next;
+        }
+        my %lob_values = $self->_extract_lob_values($fields);
+        my %values = $self->_extract_column_values($fields);
         next if(! %values && !%lob_values);
         $tables_rows{$table_name}++;
         my $pk_columns = $self->primary_key_definition_cache->{$table_name} ||= [$connection->primary_key_columns($table_name)];
@@ -1545,9 +1552,9 @@ Validates number of rows.
 sub validate_number_of_rows {
     my ($self, $expected_result, $connection) = @_;
     foreach my $table_name (keys %$expected_result) {
-        my $result = $connection->record("SELECT COUNT(*) AS cnt FROM ${table_name}");
-        return "found difference in number of the ${table_name} rows - has "  . $result->{cnt} . " rows, should have " . $expected_result->{$table_name}
-            if (! defined $result->{cnt} ||  $expected_result->{$table_name} ne $result->{cnt});
+        my $rows_no =$self->count_table_rows($table_name, $connection);
+        return "found difference in number of the ${table_name} rows - has "  . $rows_no . " rows, should have " . $expected_result->{$table_name}
+            if (! defined $rows_no ||  $expected_result->{$table_name} ne $rows_no);
     }
 }
 
@@ -1587,7 +1594,7 @@ sub validate_dataset {
             }
         }
     }
-    "found difference in $table_name - missing entry: "
+    "found difference in $table_name - missing row: "
     . "\n  ". format_values($exp_dataset, @columns);
 }
 
@@ -1624,12 +1631,34 @@ sub expected_dataset_for_refresh_load_strategy {
     my ($self, $exp_dataset, $connection) = @_;
     for (my $i = 0; $i < $#{$exp_dataset}; $i += 2) {
         my $table_name = $exp_dataset->[$i];
-        my %values = $self->_extract_column_values($exp_dataset->[$i + 1]);
-        my %lob_values = $self->_extract_lob_values($exp_dataset->[$i + 1]);
+        my $fields = $exp_dataset->[$i + 1];
+        if (ref($fields) eq 'HASH' && ! scalar(%$fields)) {
+            if(my $rows = $self->count_table_rows($table_name, $connection)) {
+               return  sprintf("table ${table_name} should not have rows, has %s row(s)", $rows);
+            }
+            next;
+        }
+        my %values = $self->_extract_column_values($fields);
+        my %lob_values = $self->_extract_lob_values($fields);
         my $pk_columns = $self->primary_key_definition_cache->{$table_name} ||= [$connection->primary_key_columns($table_name)];
         my $result = $self->validate_expexted_dataset(\%values, $pk_columns, $table_name, $connection, \%lob_values);
         return $result if $result;
     }
+}
+
+
+=item count_table_rows
+
+Return number of the table rows,
+    
+    my $no_rows = $dbunit->has_empty_table($table, $connection);
+
+=cut
+
+sub count_table_rows {
+    my ($self, $table_name, $connection) = @_;
+    my $result = $connection->record("SELECT COUNT(*) AS cnt FROM ${table_name}");
+    return $result->{cnt};
 }
 
 
@@ -1654,7 +1683,7 @@ sub validate_expexted_dataset {
     if(grep { defined $_ } values %$record) {
         return compare_datasets($record, $exp_dataset, $table_name, keys %$exp_dataset);
     }
-    "found difference in $table_name - missing entry: "
+    "found difference in $table_name - missing row: "
     . "\n  ". format_values($exp_dataset, keys %$exp_dataset);
 }
 

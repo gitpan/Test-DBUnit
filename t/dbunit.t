@@ -237,7 +237,7 @@ SKIP: {
 
         {
             my $result = $dbunit->expected_dataset(emp => [ename => 'Test', empno => 30]);
-            like($result, qr{missing entry}, 'shuld find difference - missing entry');
+            like($result, qr{missing row}, 'shuld find difference - missing row');
         }
     
         {
@@ -329,7 +329,7 @@ SKIP: {
                 emp   => [%emp_2, ename => 'John'],
                 bonus => [%bonus, => sal => 32],
             );
-            like($result, qr{missing entry}, 'should find difference - missing entry');
+            like($result, qr{missing row}, 'should find difference - missing entry');
         }
     }
 

@@ -1,27 +1,23 @@
 --- #YAML:1.0
 name:                Test-DBUnit
-version:             0.19
-author:
-  - 'Adrian Witas <adrian@webapp.strefa.pl>'
-abstract: Database test framework
-license: perl
-resources:
-  license: http://dev.perl.org/licenses/
-generated_by:        ExtUtils::MakeMaker version 6.3201
+version:             0.20
+abstract:            Database test framework
+license:             perl
+author:              'Adrian Witas <adrian@webapp.strefa.pl>'
+generated_by:        ExtUtils::MakeMaker version 6.42
 distribution_type:   module
-requires:
-    perl:                          5.6.1
+requires:     
     Abstract::Meta::Class:         0
+    Data::Dumper:                  0
     DBIx::Connection:              0.13
-    XML::SAX:              	   0
+    IO::File:                      0
     Simple::SAX::Serializer:       0.05
     Sub::Uplevel:                  0
-    XML::Writer:                   0
-    IO::File:                      0
-    Data::Dumper:                  0
     Test::Builder:                 0
     Test::Pod:                     0
     Test::Pod::Coverage:           0
+    XML::SAX:                      0
+    XML::Writer:                   0
 meta-spec:
-    url:     http://module-build.sourceforge.net/META-spec-v1.2.html
-    version: 1.2
+    url:     http://module-build.sourceforge.net/META-spec-v1.3.html
+    version: 1.3

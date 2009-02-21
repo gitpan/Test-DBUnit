@@ -11,7 +11,7 @@ use Carp 'confess';
 use Sub::Uplevel qw(uplevel);
 use Test::Builder;
 
-$VERSION = '0.19';
+$VERSION = '0.20';
 
 @EXPORT = qw(
     expected_dataset_ok dataset_ok expected_xml_dataset_ok xml_dataset_ok
@@ -44,6 +44,15 @@ Test::DBUnit - Database testing framework.
         username => $ENV{DB_TEST_USERNAME},
         password => $ENV{DB_TEST_PASSWORD},
     );
+
+    #or
+
+    use Test::DBUnit;
+    use Test::More tests => $tests;
+    use DBI;
+
+    my $dbh = DBI->connect(...);
+    add_test_connection('test', $dbh)
 
     #or
 
@@ -384,7 +393,7 @@ Note that for MySQL reset sequence the test_table_name must be empty.
     reset_sequence_ok('emp_seq');
     ....
 
-=head3 Auto generated filed values tests with MySQL
+=head3 Auto generated field values tests with MySQL
 
     t/sql/create_schema.sql
     CREATE TABLE emp(
@@ -1717,6 +1726,11 @@ Adds tests connection
     #or
 
     add_test_connection('my_connection_name', dbh => $dbh);
+
+
+Note: By default there is "test" connection name, so if you would like to use only DBI then add $dbh as 'test' connection
+
+    add_test_connection('test', dbh => $dbh);
 
 
 =cut

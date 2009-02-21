@@ -1,5 +1,8 @@
 Revision history for Perl extension Test::DBUnit.
 
+0.20 Sat Feb 21 2009
+    - Added empty table check in expected_dataset as table => []
+
 0.19 Sun Jan 11 2009
     - extended documentation
 

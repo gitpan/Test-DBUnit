@@ -9,7 +9,7 @@ CREATE TABLE dept (
 ); 
 
 CREATE TABLE emp(
- empno      INT4 DEFAULT nextval('emp_seq') NOT NULL,
+ empno      NUMERIC DEFAULT nextval('emp_seq') NOT NULL,
  ename      VARCHAR(10),
  job        VARCHAR(20),
  mgr        NUMERIC(4),
